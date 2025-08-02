@@ -34,7 +34,7 @@ export default function Sidebar() {
             <BuildingOfficeIcon className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900">Sterling Tax</h1>
+            <h1 className="text-lg font-bold text-slate-900">VVV CPA PC</h1>
             <p className="text-sm text-slate-500">Client Portal</p>
           </div>
         </div>

@@ -36,7 +36,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           >
             <LockClosedIcon className="w-8 h-8 text-white" />
           </motion.div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Sterling Tax</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to VVV CPA PC</h1>
           <p className="text-slate-600">Secure your account to get started</p>
         </div>
 
