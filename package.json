@@ -12,6 +12,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.5",
     "@heroicons/react": "^2.2.0",
+    "@supabase/supabase-js": "^2.53.0",
     "@types/node": "^24.1.0",
     "framer-motion": "^12.23.9",
     "lucide-react": "^0.344.0",

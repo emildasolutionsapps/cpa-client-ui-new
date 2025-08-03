@@ -1,22 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  UserIcon, 
-  ShieldCheckIcon, 
+import { useNavigate } from 'react-router-dom';
+import {
+  ShieldCheckIcon,
   BanknotesIcon,
   PencilSquareIcon,
   UserPlusIcon,
   EyeIcon,
   EyeSlashIcon
 } from '@heroicons/react/24/outline';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Profile() {
   const [showSSN, setShowSSN] = useState(false);
-  const [mfaEnabled, setMfaEnabled] = useState(true);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const { user, checkMFAStatus } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadMFAStatus = async () => {
+      const { enabled, error } = await checkMFAStatus();
+      if (!error) {
+        setMfaEnabled(enabled);
+      }
+    };
+
+    loadMFAStatus();
+  }, [checkMFAStatus]);
 
   const profileData = {
-    name: 'John Michael Doe',
-    email: 'john.doe@email.com',
+    name: user?.user_metadata?.full_name || 'User',
+    email: user?.email || 'user@example.com',
     ssn: '***-**-6789',
     ssnFull: '123-45-6789',
     address: '123 Main Street, Anytown, ST 12345',
@@ -28,6 +45,18 @@ export default function Profile() {
     { bank: 'Chase Checking', account: '****1234', type: 'Primary' },
     { bank: 'Wells Fargo Savings', account: '****5678', type: 'Secondary' },
   ];
+
+  const handleMFAToggle = async () => {
+    if (mfaEnabled) {
+      // For disabling MFA, we'd need to implement a disable function
+      // For now, just show a message
+      setError('MFA cannot be disabled for security reasons. Please contact support.');
+      return;
+    }
+
+    // For enabling MFA, redirect to setup page
+    navigate('/mfa-setup');
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -100,7 +129,7 @@ export default function Profile() {
         </motion.div>
 
         {/* Security Settings Card */}
-        <motion.div 
+        <motion.div
           className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -110,7 +139,13 @@ export default function Profile() {
             <ShieldCheckIcon className="w-6 h-6 text-emerald-600" />
             <span>Security Settings</span>
           </h3>
-          
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-200">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
@@ -123,15 +158,16 @@ export default function Profile() {
             </div>
             <div className="flex items-center space-x-3">
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                mfaEnabled 
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                mfaEnabled
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                   : 'bg-slate-100 text-slate-800 border border-slate-200'
               }`}>
                 {mfaEnabled ? 'Enabled' : 'Disabled'}
               </span>
               <button
-                onClick={() => setMfaEnabled(!mfaEnabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                onClick={handleMFAToggle}
+                disabled={mfaLoading}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
                   mfaEnabled ? 'bg-emerald-600' : 'bg-slate-300'
                 }`}
               >
