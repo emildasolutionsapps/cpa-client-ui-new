@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import { NotificationProvider } from './components/Notifications/NotificationProvider';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -32,44 +33,56 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={
             <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
+              <NotificationProvider>
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
+              </NotificationProvider>
             </ProtectedRoute>
           } />
           <Route path="/documents" element={
             <ProtectedRoute>
-              <AppLayout>
-                <Documents />
-              </AppLayout>
+              <NotificationProvider>
+                <AppLayout>
+                  <Documents />
+                </AppLayout>
+              </NotificationProvider>
             </ProtectedRoute>
           } />
           <Route path="/signatures" element={
             <ProtectedRoute>
-              <AppLayout>
-                <Signatures />
-              </AppLayout>
+              <NotificationProvider>
+                <AppLayout>
+                  <Signatures />
+                </AppLayout>
+              </NotificationProvider>
             </ProtectedRoute>
           } />
           <Route path="/billing" element={
             <ProtectedRoute>
-              <AppLayout>
-                <Billing />
-              </AppLayout>
+              <NotificationProvider>
+                <AppLayout>
+                  <Billing />
+                </AppLayout>
+              </NotificationProvider>
             </ProtectedRoute>
           } />
           <Route path="/messages" element={
             <ProtectedRoute>
-              <ChatLayout>
-                <Messages />
-              </ChatLayout>
+              <NotificationProvider>
+                <ChatLayout>
+                  <Messages />
+                </ChatLayout>
+              </NotificationProvider>
             </ProtectedRoute>
           } />
           <Route path="/profile" element={
             <ProtectedRoute>
-              <AppLayout>
-                <Profile />
-              </AppLayout>
+              <NotificationProvider>
+                <AppLayout>
+                  <Profile />
+                </AppLayout>
+              </NotificationProvider>
             </ProtectedRoute>
           } />
         </Routes>

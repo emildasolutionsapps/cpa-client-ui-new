@@ -4,7 +4,8 @@ import {
   PaperAirplaneIcon,
   PaperClipIcon,
   UserIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,10 +22,30 @@ const Messages: React.FC = () => {
   const { user, selectedClient, selectedClientId } = useAuth();
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const refreshMessages = () => setRefreshKey(k => k + 1);
+
+  const downloadAttachment = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file. Please try again.');
+    }
+  };
 
   const loadMessages = useCallback(async () => {
     if (!selectedClientId) return;
@@ -33,6 +54,8 @@ const Messages: React.FC = () => {
       const data = await ChatService.getMessages(selectedClientId);
       setMessages(data);
       await UnreadService.markAsRead(selectedClientId);
+      // Scroll after loading messages
+      setTimeout(scrollToBottom, 200);
     } catch (err) {
       console.error('Error loading messages:', err);
     } finally {
@@ -41,7 +64,9 @@ const Messages: React.FC = () => {
   }, [selectedClientId]);
 
   // Scroll whenever messages change
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Load & subscribe when client changes or refreshKey increments
   useEffect(() => {
@@ -49,16 +74,39 @@ const Messages: React.FC = () => {
 
     loadMessages();
 
-    const subscription = ChatService.subscribeToMessages(
-      selectedClientId,
-      newMessage => {
-        setMessages(prev => [...prev, newMessage]);
-        scrollToBottom();
+    // Set up async subscription
+    let subscription: unknown = null;
+
+    const setupSubscription = async () => {
+      try {
+        subscription = await ChatService.subscribeToMessages(
+          selectedClientId,
+          newMessage => {
+            console.log('Client Messages: Received new message via subscription:', newMessage);
+            setMessages(prev => {
+              // Check if message already exists to avoid duplicates
+              const exists = prev.some(msg => msg.id === newMessage.id);
+              if (exists) {
+                console.log('Client Messages: Message already exists, skipping duplicate');
+                return prev;
+              }
+              console.log('Client Messages: Adding new message to state');
+              return [...prev, newMessage];
+            });
+            scrollToBottom();
+          }
+        );
+      } catch (error) {
+        console.error('Client Messages: Error setting up subscription:', error);
       }
-    );
+    };
+
+    setupSubscription();
 
     return () => {
-      ChatService.unsubscribeFromMessages(subscription);
+      if (subscription) {
+        ChatService.unsubscribeFromMessages(subscription);
+      }
     };
   }, [selectedClientId, refreshKey, loadMessages]);
 
@@ -262,27 +310,37 @@ const Messages: React.FC = () => {
                     {msg.attachments && (
                       <div className="mt-2 space-y-1">
                         {msg.attachments.map(att => (
-                          <a
+                          <div
                             key={att.id}
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`flex items-center space-x-2 p-2 rounded-lg text-xs hover:opacity-80 transition-opacity ${
+                            className={`flex items-center justify-between p-2 rounded-lg text-xs ${
                               msg.senderType === 'client'
                                 ? 'bg-blue-700'
                                 : 'bg-slate-100'
                             }`}
                           >
-                            <PaperClipIcon className="w-3 h-3" />
-                            <span className="truncate">
-                              {att.name}
-                            </span>
-                            {att.size ? (
-                              <span className="text-xs opacity-75">
-                                ({Math.round(att.size / 1024)}KB)
+                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                              <PaperClipIcon className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">
+                                {att.name}
                               </span>
-                            ) : null}
-                          </a>
+                              {att.size ? (
+                                <span className="text-xs opacity-75 flex-shrink-0">
+                                  ({Math.round(att.size / 1024)}KB)
+                                </span>
+                              ) : null}
+                            </div>
+                            <button
+                              onClick={() => downloadAttachment(att.url, att.name)}
+                              className={`ml-2 p-1 rounded hover:opacity-80 transition-opacity ${
+                                msg.senderType === 'client'
+                                  ? 'hover:bg-blue-600'
+                                  : 'hover:bg-slate-200'
+                              }`}
+                              title="Download file"
+                            >
+                              <ArrowDownTrayIcon className="w-3 h-3" />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}

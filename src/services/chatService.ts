@@ -46,7 +46,7 @@ export class ChatService {
 
       if (!messages) return [];
 
-      // Fetch user info for each message
+      // Fetch user info and attachments for each message
       const messagesWithUserInfo = await Promise.all(
         messages.map(async (msg: any) => {
           const { data: user } = await supabase
@@ -54,6 +54,28 @@ export class ChatService {
             .select("UserID, FullName, UserType")
             .eq("UserID", msg.SenderUserID)
             .single();
+
+          // Fetch attachments for this message
+          const { data: attachments } = await supabase
+            .from("MessageAttachments")
+            .select("*")
+            .eq("MessageID", msg.MessageID);
+
+          let messageAttachments: ChatAttachment[] = [];
+          if (attachments && attachments.length > 0) {
+            messageAttachments = await Promise.all(
+              attachments.map(async (att: any) => {
+                const { url } = await getPresignedUrl(att.S3_Key);
+                return {
+                  id: att.AttachmentID,
+                  name: att.OriginalFileName,
+                  url: url,
+                  type: att.S3_Key.split(".").pop() || "file",
+                  size: att.FileSize,
+                };
+              }),
+            );
+          }
 
           return {
             id: msg.MessageID,
@@ -63,7 +85,7 @@ export class ChatService {
             content: msg.Content,
             timestamp: msg.CreatedAt,
             isRead: true, // We'll implement read status later
-            attachments: [], // We'll fetch attachments separately if needed
+            attachments: messageAttachments,
           };
         }),
       );
@@ -167,48 +189,91 @@ export class ChatService {
   }
 
   // Subscribe to real-time messages for a client
-  static subscribeToMessages(
+  static async subscribeToMessages(
     clientId: string,
     callback: (message: ChatMessage) => void,
   ) {
-    const channel = supabase.channel(`client-messages-${clientId}`);
+    try {
+      // First get the channel ID for this client
+      const channelId = await this.getOrCreateChannel(clientId);
+      if (!channelId) {
+        console.error("Client app: Could not get channel ID for subscription");
+        return null;
+      }
 
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "Messages",
-        },
-        async (payload) => {
-          // Check if this message belongs to this client's channel
-          const { data: channelData } = await supabase
-            .from("ChatChannels")
-            .select("ChannelID")
-            .eq("ClientID", clientId)
-            .single();
+      console.log(
+        `Client app: Setting up subscription for channel ${channelId}`,
+      );
+      const channel = supabase.channel(
+        `client-messages-${clientId}-${Date.now()}`,
+      );
 
-          if (channelData && payload.new.ChannelID === channelData.ChannelID) {
-            // Fetch the complete message with user info
-            const { data: message, error } = await supabase
-              .from("Messages")
-              .select(`
-                MessageID,
-                Content,
-                CreatedAt,
-                SenderUserID
-              `)
-              .eq("MessageID", payload.new.MessageID)
-              .single();
+      channel
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "Messages",
+            filter: `ChannelID=eq.${channelId}`,
+          },
+          async (payload) => {
+            try {
+              console.log(
+                "Client app: New message received via real-time:",
+                payload.new,
+              );
 
-            if (!error && message) {
+              // Fetch the complete message with user info
+              const { data: message, error } = await supabase
+                .from("Messages")
+                .select(`
+                  MessageID,
+                  Content,
+                  CreatedAt,
+                  SenderUserID
+                `)
+                .eq("MessageID", payload.new.MessageID)
+                .single();
+
+              if (error || !message) {
+                console.error(
+                  "Client app: Error fetching message details:",
+                  error,
+                );
+                return;
+              }
+
+              console.log("Client app: Fetched complete message:", message);
+
               // Fetch user info separately
               const { data: user } = await supabase
                 .from("Users")
                 .select("UserID, FullName, UserType")
                 .eq("UserID", message.SenderUserID)
                 .single();
+
+              // Check for attachments
+              const { data: attachments } = await supabase
+                .from("MessageAttachments")
+                .select("*")
+                .eq("MessageID", message.MessageID);
+
+              let messageAttachments: ChatAttachment[] = [];
+              if (attachments && attachments.length > 0) {
+                messageAttachments = await Promise.all(
+                  attachments.map(async (att: any) => {
+                    const { url } = await getPresignedUrl(att.S3_Key);
+                    return {
+                      id: att.AttachmentID,
+                      name: att.OriginalFileName,
+                      url: url,
+                      type: att.S3_Key.split(".").pop() || "file",
+                      size: att.FileSize,
+                    };
+                  }),
+                );
+              }
 
               const chatMessage: ChatMessage = {
                 id: message.MessageID,
@@ -220,15 +285,34 @@ export class ChatService {
                 content: message.Content,
                 timestamp: message.CreatedAt,
                 isRead: true,
+                attachments: messageAttachments,
               };
-              callback(chatMessage);
-            }
-          }
-        },
-      )
-      .subscribe();
 
-    return channel;
+              console.log(
+                "Client app: Calling callback with message:",
+                chatMessage,
+              );
+              callback(chatMessage);
+            } catch (error) {
+              console.error(
+                "Client app: Error processing real-time message:",
+                error,
+              );
+            }
+          },
+        )
+        .subscribe((status) => {
+          console.log(
+            `Client app: Subscription status for channel ${channelId}:`,
+            status,
+          );
+        });
+
+      return channel;
+    } catch (error) {
+      console.error("Client app: Error setting up subscription:", error);
+      return null;
+    }
   }
 
   // Unsubscribe from real-time messages
@@ -259,11 +343,12 @@ export class ChatService {
       const channelId = await this.getOrCreateChannel(clientId);
       if (!channelId) return null;
 
-      // Generate unique filename for chat uploads
+      // Generate unique filename for chat uploads while preserving original name
       const fileExt = file.name.split(".").pop();
+      const baseName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
-      const uniqueFileName = `${timestamp}-${randomId}.${fileExt}`;
+      const uniqueFileName = `${baseName}_${timestamp}_${randomId}.${fileExt}`;
       const s3Key = `chat-uploads/${uniqueFileName}`;
 
       // Upload file to S3
