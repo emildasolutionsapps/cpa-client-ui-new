@@ -60,9 +60,9 @@ function App() {
           } />
           <Route path="/messages" element={
             <ProtectedRoute>
-              <AppLayout>
+              <ChatLayout>
                 <Messages />
-              </AppLayout>
+              </ChatLayout>
             </ProtectedRoute>
           } />
           <Route path="/profile" element={
@@ -84,6 +84,18 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <Sidebar />
       <main className="flex-1 ml-64 p-8">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+// Special layout for chat page - no padding, full height
+function ChatLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 ml-64 h-full overflow-hidden">
         {children}
       </main>
     </div>

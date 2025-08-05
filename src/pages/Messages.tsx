@@ -1,27 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   PaperAirplaneIcon,
   PaperClipIcon,
   UserIcon,
-  PhoneIcon,
-  VideoCameraIcon
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
-import { useClientData } from '../hooks/useClientData';
+import { useAuth } from '../contexts/AuthContext';
+import { ChatService, ChatMessage } from '../services/chatService';
+import { UnreadService } from '../services/unreadService';
 
 export default function Messages() {
   const [message, setMessage] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedAccountant, setSelectedAccountant] = useState('Sarah Mitchell, CPA');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Use client data hook
-  const {
-    messages: clientMessages,
-    selectedClient,
-    loadingMessages,
-    messagesError
-  } = useClientData();
+  const { user, selectedClient, selectedClientId } = useAuth();
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+
+
+  useEffect(() => {
+    if (selectedClientId) {
+      loadMessages();
+
+      // Subscribe to real-time messages
+      const subscription = ChatService.subscribeToMessages(selectedClientId, (newMessage) => {
+        setMessages(prev => [...prev, newMessage]);
+        scrollToBottom();
+      });
+
+      return () => {
+        ChatService.unsubscribeFromMessages(subscription);
+      };
+    }
+  }, [selectedClientId, refreshKey]);
+
+  // Add a refresh mechanism
+  const refreshMessages = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (selectedClientId) {
+        loadMessages();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [selectedClientId]);
+
+  const loadMessages = async () => {
+    if (!selectedClientId) return;
+
+    setLoading(true);
+    try {
+      const data = await ChatService.getMessages(selectedClientId);
+      setMessages(data);
+
+      // Mark messages as read when loading
+      await UnreadService.markAsRead(selectedClientId);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Show message if no client is selected
   if (!selectedClient) {
@@ -36,200 +92,250 @@ export default function Messages() {
     )
   }
 
-  // Sample list of accountants
-  const accountants = [
-    { name: 'Sarah Mitchell, CPA', email: 'sarah.mitchell@example.com', avatar: null },
-    { name: 'John Doe, CPA', email: 'john.doe@example.com', avatar: null },
-    { name: 'Emily Johnson, CPA', email: 'emily.johnson@example.com', avatar: null },
-    { name: 'David Smith, CPA', email: 'david.smith@example.com', avatar: null }
-  ];
-
-  // Messages organized by client profile
-  const messagesByClient: Record<string, Array<{id: number, sender: string, content: string, timestamp: string, isOwn: boolean}>> = {
-    'John & Jane Doe': [
-      { id: 1, sender: 'Sarah Mitchell, CPA', content: 'Hi! I\'ve received your joint tax documents. I\'ll start reviewing them today.', timestamp: '10:30 AM', isOwn: false },
-      { id: 2, sender: 'You', content: 'Great! Let me know if you need any additional information.', timestamp: '10:35 AM', isOwn: true },
-      { id: 3, sender: 'Sarah Mitchell, CPA', content: 'I have a question about your business expenses. Can we schedule a quick call?', timestamp: '2:15 PM', isOwn: false },
-      { id: 4, sender: 'You', content: 'Sure, I\'m available this afternoon. What time works for you?', timestamp: '2:20 PM', isOwn: true }
-    ],
-    'John Doe (Individual)': [
-      { id: 5, sender: 'Emily Johnson, CPA', content: 'Hello John! I\'m reviewing your individual tax return. Everything looks good so far.', timestamp: '9:15 AM', isOwn: false },
-      { id: 6, sender: 'You', content: 'Thanks Emily! Do you need any additional documentation?', timestamp: '9:30 AM', isOwn: true },
-      { id: 7, sender: 'Emily Johnson, CPA', content: 'Could you send me your 1099-INT form when you get a chance?', timestamp: '11:45 AM', isOwn: false }
-    ],
-    'Jane Doe (Individual)': [
-      { id: 8, sender: 'David Smith, CPA', content: 'Hi Jane! I\'ve started working on your individual return. I notice you have some freelance income this year.', timestamp: '2:00 PM', isOwn: false },
-      { id: 9, sender: 'You', content: 'Yes, I started freelancing in March. I have all the 1099s ready.', timestamp: '2:15 PM', isOwn: true }
-    ],
-    'ABC Corporation': [
-      { id: 10, sender: 'John Doe, CPA', content: 'Good morning! I\'m handling ABC Corporation\'s quarterly filing. I have a few questions about Q4 expenses.', timestamp: '8:30 AM', isOwn: false },
-      { id: 11, sender: 'You', content: 'Morning John! I\'m ready to discuss the Q4 numbers. What specific expenses do you need clarification on?', timestamp: '8:45 AM', isOwn: true }
-    ]
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
-  // Get messages for the currently selected client (using sample data for now)
-  const messages = messagesByClient[selectedClient?.ClientName || ''] || [];
+  const handleSendMessage = async () => {
+    if (message.trim() && user && selectedClientId) {
+      const messageText = message.trim();
+      const tempId = `temp-${Date.now()}`;
 
-  const toggleModal = () => setIsModalOpen(!isModalOpen);
+      // Optimistic update - add message immediately
+      const optimisticMessage: ChatMessage = {
+        id: tempId,
+        senderId: user.id,
+        senderName: user.name || 'You',
+        senderType: 'client',
+        content: messageText,
+        timestamp: new Date().toISOString(),
+        isRead: true,
+      };
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      // Here you would typically send the message to your backend
-      console.log('Sending message:', message);
-      setMessage('');
+      setMessages(prev => [...prev, optimisticMessage]);
+      setMessage(''); // Clear input immediately
+      scrollToBottom();
+
+      // Send in background
+      try {
+        const sentMessage = await ChatService.sendMessage(
+          selectedClientId,
+          user.id,
+          messageText
+        );
+
+        if (sentMessage) {
+          // Replace optimistic message with real one
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === tempId ? sentMessage : msg
+            )
+          );
+        } else {
+          // Remove optimistic message on failure
+          setMessages(prev => prev.filter(msg => msg.id !== tempId));
+          setMessage(messageText); // Restore message
+          alert('Failed to send message. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+        // Remove optimistic message on error
+        setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        setMessage(messageText); // Restore message
+        alert('Failed to send message. Please try again.');
+      }
     }
   };
 
   const handleAttachment = () => {
-    // Handle file attachment
     const input = document.createElement('input');
     input.type = 'file';
-    input.multiple = true;
-    input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png';
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files) {
-        console.log('Selected files:', Array.from(files));
-        // Handle file upload logic here
+    input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.xlsx,.xls,.csv';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file && user && selectedClientId) {
+        // Validate file first
+        const { validateFile } = await import('../services/s3Service');
+        const validation = validateFile(file);
+
+        if (!validation.valid) {
+          alert(validation.error);
+          return;
+        }
+
+        const tempId = `temp-file-${Date.now()}`;
+        const messageText = `📎 Uploading: ${file.name}...`;
+
+        // Optimistic update - show uploading message immediately
+        const optimisticMessage: ChatMessage = {
+          id: tempId,
+          senderId: user.id,
+          senderName: user.name || 'You',
+          senderType: 'client',
+          content: messageText,
+          timestamp: new Date().toISOString(),
+          isRead: true,
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
+        scrollToBottom();
+
+        try {
+          const sentMessage = await ChatService.sendMessageWithAttachment(
+            selectedClientId,
+            user.id,
+            `📎 Sent a file: ${file.name}`,
+            file
+          );
+
+          if (sentMessage) {
+            // Replace optimistic message with real one
+            setMessages(prev =>
+              prev.map(msg =>
+                msg.id === tempId ? sentMessage : msg
+              )
+            );
+          } else {
+            // Remove optimistic message on failure
+            setMessages(prev => prev.filter(msg => msg.id !== tempId));
+            alert('Failed to send file. Please try again.');
+          }
+        } catch (error) {
+          console.error('Error sending file:', error);
+          // Remove optimistic message on error
+          setMessages(prev => prev.filter(msg => msg.id !== tempId));
+          alert('Failed to send file. Please try again.');
+        }
       }
     };
     input.click();
   };
 
   return (
-    <div className="max-w-4xl mx-auto h-screen flex flex-col">
+    <div className="h-full flex flex-col w-full overflow-hidden bg-white">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 p-4">
-        {/* Client Selector */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-600 mb-2">Client Profile:</label>
-          <select
-            value={selectedClient}
-            onChange={(e) => setSelectedClient(e.target.value)}
-            className="w-full max-w-xs bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-          >
-            {clientProfiles.map((client) => (
-              <option key={client} value={client}>{client}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Accountant Info and Actions */}
+      <div className="bg-white border-b border-slate-200 p-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <UserCircleIcon className="w-10 h-10 text-blue-600" />
             <div>
-              <h1 className="text-lg font-semibold text-slate-900">{selectedAccountant}</h1>
-              <p className="text-sm text-slate-500">Conversation for {selectedClient}</p>
+              <h1 className="text-lg font-semibold text-slate-900">Messages</h1>
+              <p className="text-sm text-slate-500">Conversation for {selectedClient?.ClientName}</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-              <PhoneIcon className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-              <VideoCameraIcon className="w-5 h-5" />
-            </button>
-            <button
-              onClick={toggleModal}
-              className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <UserIcon className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={refreshMessages}
+            disabled={loading}
+            className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh messages"
+          >
+            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
-              msg.isOwn
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-slate-900 border border-slate-200'
-            }`}>
-              <p className="text-sm">{msg.content}</p>
-              <p className={`text-xs mt-1 ${
-                msg.isOwn ? 'text-blue-100' : 'text-slate-500'
-              }`}>
-                {msg.timestamp}
-              </p>
+      <div className="flex-1 overflow-hidden bg-slate-50">
+        <div className="h-full overflow-y-auto p-4 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          </motion.div>
-        ))}
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-500">
+              <div className="text-4xl mb-4">👋</div>
+              <p className="text-center">Start a conversation</p>
+              <p className="text-sm text-center mt-1">Send a message to your accountant</p>
+            </div>
+          ) : (
+            <>
+              {messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${msg.senderType === 'client' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                    msg.senderType === 'client'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-900 border border-slate-200'
+                  }`}>
+                    <p className="text-sm">{msg.content}</p>
+
+                    {/* Attachments */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {msg.attachments.map((attachment) => (
+                          <a
+                            key={attachment.id}
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-center space-x-2 p-2 rounded-lg text-xs hover:opacity-80 transition-opacity ${
+                              msg.senderType === 'client' ? 'bg-blue-700' : 'bg-slate-100'
+                            }`}
+                          >
+                            <PaperClipIcon className="w-3 h-3" />
+                            <span className="truncate">{attachment.name}</span>
+                            {attachment.size && attachment.size > 0 && (
+                              <span className="text-xs opacity-75">
+                                ({Math.round(attachment.size / 1024)}KB)
+                              </span>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className={`text-xs mt-1 ${
+                      msg.senderType === 'client' ? 'text-blue-100' : 'text-slate-500'
+                    }`}>
+                      {formatTime(msg.timestamp)}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </div>
       </div>
 
       {/* Message Input */}
-      <div className="bg-white border-t border-slate-200 p-4">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleAttachment}
-            className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          >
-            <PaperClipIcon className="w-5 h-5" />
-          </button>
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="Type your message..."
-              className="w-full px-4 py-2 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <button
-            onClick={handleSendMessage}
-            disabled={!message.trim()}
-            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <PaperAirplaneIcon className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Modal for Accountants */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-900 mb-4">Switch Accountant</h3>
-            <ul className="space-y-3">
-              {accountants.map((accountant, index) => (
-                <li key={index} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <UserCircleIcon className="w-10 h-10 text-blue-600" />
-                    <div>
-                      <p className="font-medium text-slate-900">{accountant.name}</p>
-                      <p className="text-sm text-slate-500">{accountant.email}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSelectedAccountant(accountant.name);
-                      toggleModal();
-                    }}
-                    className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
-                  >
-                    {selectedAccountant === accountant.name ? 'Current' : 'Switch'}
-                  </button>
-                </li>
-              ))}
-            </ul>
+      <div className="bg-white border-t border-slate-200 p-4 flex-shrink-0">
+          <div className="flex items-center space-x-2">
             <button
-              onClick={toggleModal}
-              className="mt-6 w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+              onClick={handleAttachment}
+              className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             >
-              Cancel
+              <PaperClipIcon className="w-5 h-5" />
+            </button>
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder="Type your message..."
+                className="w-full px-4 py-2 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={handleSendMessage}
+              disabled={!message.trim()}
+              className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <PaperAirplaneIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

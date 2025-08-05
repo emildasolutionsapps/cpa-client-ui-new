@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   HomeIcon,
@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { UnreadService } from '../services/unreadService';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -32,7 +33,35 @@ export default function Sidebar() {
     setSelectedClient,
     loadingClients
   } = useAuth();
+
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (selectedClient?.ClientID) {
+      // Load initial unread count
+      loadUnreadCount();
+
+      // Subscribe to unread updates
+      const subscription = UnreadService.subscribeToUnreadUpdates(
+        selectedClient.ClientID,
+        (count) => {
+          setUnreadCount(count);
+        }
+      );
+
+      return () => {
+        UnreadService.unsubscribeFromUnreadUpdates(subscription);
+      };
+    }
+  }, [selectedClient]);
+
+  const loadUnreadCount = async () => {
+    if (selectedClient?.ClientID) {
+      const count = await UnreadService.getUnreadCount(selectedClient.ClientID);
+      setUnreadCount(count);
+    }
+  };
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -112,7 +141,12 @@ export default function Sidebar() {
                       isActive ? 'text-blue-600' : 'text-slate-500 group-hover:text-slate-700'
                     }`}
                   />
-                  <span>{item.name}</span>
+                  <span className="flex-1">{item.name}</span>
+                  {item.name === 'Messages' && unreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </>
               )}
             </NavLink>

@@ -16,6 +16,12 @@
     @apply text-slate-900 antialiased;
     font-feature-settings: 'cv01', 'cv03', 'cv04', 'cv09';
   }
+
+  /* Prevent body scroll on chat pages */
+  .chat-page {
+    overflow: hidden;
+    height: 100vh;
+  }
 }
 
 @layer utilities {
