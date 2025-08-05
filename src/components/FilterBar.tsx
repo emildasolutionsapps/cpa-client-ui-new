@@ -1,27 +1,79 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDownIcon, UserIcon, CalendarIcon, BriefcaseIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { DocumentService, Job } from '../services/documentService';
 
 interface FilterBarProps {
-  selectedJob: string;
-  setSelectedJob: (job: string) => void;
+  selectedJobId: string;
+  setSelectedJobId: (jobId: string) => void;
+  selectedJobName: string;
+  setSelectedJobName: (jobName: string) => void;
   selectedYear: string;
   setSelectedYear: (year: string) => void;
 }
 
 export default function FilterBar({
-  selectedJob,
-  setSelectedJob,
+  selectedJobId,
+  setSelectedJobId,
+  selectedJobName,
+  setSelectedJobName,
   selectedYear,
   setSelectedYear
 }: FilterBarProps) {
   const {
     availableClients,
     selectedClient,
+    selectedClientId,
     setSelectedClient,
     loadingClients
   } = useAuth();
+
+  const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
+  // Load jobs when client changes
+  useEffect(() => {
+    const loadJobs = async () => {
+      if (!selectedClientId) {
+        setAvailableJobs([]);
+        setSelectedJobId('');
+        setSelectedJobName('');
+        return;
+      }
+
+      setLoadingJobs(true);
+      try {
+        const { data: jobs, error } = await DocumentService.getClientJobs(selectedClientId);
+        if (error) {
+          console.error('Error loading jobs:', error);
+          setAvailableJobs([]);
+        } else {
+          setAvailableJobs(jobs || []);
+          // Auto-select first job if available and none selected
+          if (jobs && jobs.length > 0 && !selectedJobId) {
+            setSelectedJobId(jobs[0].JobID);
+            setSelectedJobName(jobs[0].JobName);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading jobs:', error);
+        setAvailableJobs([]);
+      } finally {
+        setLoadingJobs(false);
+      }
+    };
+
+    loadJobs();
+  }, [selectedClientId, selectedJobId, setSelectedJobId, setSelectedJobName]);
+
+  const handleJobChange = (jobId: string) => {
+    const job = availableJobs.find(j => j.JobID === jobId);
+    if (job) {
+      setSelectedJobId(jobId);
+      setSelectedJobName(job.JobName);
+    }
+  };
   return (
     <motion.div
       className="mb-8"
@@ -121,15 +173,25 @@ export default function FilterBar({
           </div>
           <div className="relative">
             <select
-              value={selectedJob}
-              onChange={(e) => setSelectedJob(e.target.value)}
-              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-amber-300 focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all duration-200"
+              value={selectedJobId}
+              onChange={(e) => handleJobChange(e.target.value)}
+              disabled={loadingJobs || availableJobs.length === 0}
+              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-amber-300 focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all duration-200 disabled:opacity-50"
             >
-              <option>2025 Tax Return</option>
-              <option>2024 Tax Return</option>
-              <option>Quarterly Filing</option>
-              <option>Tax Amendment</option>
-              <option>Business Filing</option>
+              {loadingJobs ? (
+                <option value="">Loading services...</option>
+              ) : availableJobs.length === 0 ? (
+                <option value="">No services available</option>
+              ) : (
+                <>
+                  <option value="">Select a service type...</option>
+                  {availableJobs.map((job) => (
+                    <option key={job.JobID} value={job.JobID}>
+                      {job.JobName}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
             <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
           </div>
@@ -147,7 +209,7 @@ export default function FilterBar({
         <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2 rounded-full border border-blue-100">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
           <span className="text-sm font-medium text-slate-700">
-            Viewing: {selectedClient?.ClientName || 'No client selected'} • {selectedYear} • {selectedJob}
+            Viewing: {selectedClient?.ClientName || 'No client selected'} • {selectedYear} • {selectedJobName || 'No service selected'}
           </span>
         </div>
       </motion.div>

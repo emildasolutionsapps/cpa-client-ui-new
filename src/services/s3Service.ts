@@ -103,6 +103,45 @@ export const validateFile = (
 };
 
 /**
+ * Create a slugified string for folder names
+ */
+const slugify = (text: string): string => {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/[^\w\s-]/g, "") // Remove special characters
+    .replace(/[\s_-]+/g, "-") // Replace spaces and underscores with hyphens
+    .replace(/^-+|-+$/g, ""); // Remove leading/trailing hyphens
+};
+
+/**
+ * Create client folder name following the specification
+ */
+export const createClientFolderName = (
+  clientName: string,
+  clientCode: string,
+): string => {
+  const slugifiedName = slugify(clientName);
+  return `${slugifiedName}-${clientCode}`;
+};
+
+/**
+ * Get the S3 key for client document uploads following the specification:
+ * clients/(clientname+clientcode)/jobid/02_Requested_Documents/filename
+ */
+export const getClientDocumentKey = (
+  clientName: string,
+  clientCode: string,
+  jobId: string,
+  fileName: string,
+): string => {
+  const clientFolderName = createClientFolderName(clientName, clientCode);
+  return `clients/${clientFolderName}/${jobId}/02_Requested_Documents/${fileName}`;
+};
+
+/**
  * Upload file to S3 with validation
  */
 export const uploadFileToS3 = async (
@@ -171,6 +210,41 @@ export const uploadFileToS3 = async (
       key: "",
       url: "",
       error: error.message || "Failed to upload file",
+    };
+  }
+};
+
+/**
+ * Upload client document using the specification folder structure:
+ * clients/(clientname+clientcode)/jobid/02_Requested_Documents/filename
+ */
+export const uploadClientDocument = async (
+  file: File,
+  clientName: string,
+  clientCode: string,
+  jobId: string,
+  metadata?: Record<string, string>,
+  onProgress?: (progress: S3UploadProgress) => void,
+): Promise<S3UploadResult> => {
+  try {
+    // Use original filename for client uploads (no timestamp/random ID)
+    const key = getClientDocumentKey(clientName, clientCode, jobId, file.name);
+
+    // Upload the file using the standard upload function
+    return await uploadFileToS3(file, key, {
+      clientName,
+      clientCode,
+      jobId,
+      originalFileName: file.name,
+      uploadType: "client_document",
+      ...metadata,
+    }, onProgress);
+  } catch (error: any) {
+    console.error("Error uploading client document:", error);
+    return {
+      key: "",
+      url: "",
+      error: error.message || "Failed to upload client document",
     };
   }
 };

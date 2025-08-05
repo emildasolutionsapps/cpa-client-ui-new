@@ -82,12 +82,12 @@ export class DataService {
 
       const jobIds = jobs.map((job) => job.JobID);
 
-      // Then get documents for those jobs
+      // Then get documents for those jobs using correct table name
       const { data, error } = await supabase
-        .from("documents")
+        .from("Documents") // Updated to match admin app schema
         .select("*")
-        .in("job_id", jobIds)
-        .order("uploaded_at", { ascending: false });
+        .in("JobID", jobIds) // Updated column name
+        .order("CreatedAt", { ascending: false }); // Updated column name
 
       if (error) {
         console.error("Error fetching documents for client:", error);

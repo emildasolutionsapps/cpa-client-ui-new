@@ -15,7 +15,8 @@ import UploadZone from '../components/UploadZone';
 import { useClientData } from '../hooks/useClientData';
 
 export default function Dashboard() {
-  const [selectedJob, setSelectedJob] = useState('2025 Tax Return');
+  const [selectedJobId, setSelectedJobId] = useState<string>('');
+  const [selectedJobName, setSelectedJobName] = useState('');
   const [selectedYear, setSelectedYear] = useState('2025');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -62,8 +63,10 @@ export default function Dashboard() {
   return (
     <div className="max-w-7xl mx-auto">
       <FilterBar
-        selectedJob={selectedJob}
-        setSelectedJob={setSelectedJob}
+        selectedJobId={selectedJobId}
+        setSelectedJobId={setSelectedJobId}
+        selectedJobName={selectedJobName}
+        setSelectedJobName={setSelectedJobName}
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
       />
@@ -95,7 +98,7 @@ export default function Dashboard() {
         transition={{ duration: 0.6, delay: 0.1 }}
       >
         <h2 className="text-xl font-semibold text-slate-900 mb-4">Upload Documents</h2>
-        <UploadZone />
+        <UploadZone selectedJobId={selectedJobId} selectedJobName={selectedJobName} />
       </motion.div>
 
       {/* Status Cards Grid */}
