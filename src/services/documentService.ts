@@ -146,6 +146,15 @@ export class DocumentService {
     clientCode: string,
   ): Promise<{ success: boolean; documentId?: string; error?: string }> {
     try {
+      console.log("Starting client document upload:", {
+        fileName: file.name,
+        jobId,
+        clientId,
+        clientName,
+        clientCode,
+        userId,
+      });
+
       // Upload file to S3 using the proper client document structure
       const uploadResult = await uploadClientDocument(
         file,
@@ -155,34 +164,48 @@ export class DocumentService {
       );
 
       if (uploadResult.error) {
+        console.error("S3 upload failed:", uploadResult.error);
         throw new Error(uploadResult.error);
       }
 
-      // TODO: Database record creation will be handled by 3rd party app
-      // Commenting out for now - can be re-enabled later if needed
-      /*
-      const { data, error } = await supabase
-        .from("Documents")
-        .insert({
-          JobID: jobId,
-          FileName: file.name,
-          FileSize: file.size,
-          DocumentType: "Client Upload",
-          Status: "uploaded",
-          S3Path: uploadResult.key,
-          UploadedBy: userId,
-          ClientCanSee: true,
-        })
-        .select("DocumentID")
-        .single();
+      console.log("S3 upload successful:", uploadResult.key);
 
-      if (error) {
-        console.error("Error creating document record:", error);
-        throw error;
+      // Create database record for the uploaded document
+      try {
+        const { data, error } = await supabase
+          .from("Documents")
+          .insert({
+            JobID: jobId,
+            FileName: file.name, // Using current schema column name
+            FileSize: file.size, // Now available
+            DocumentType: "client_upload",
+            Status: "uploaded", // Now available
+            S3Path: uploadResult.key, // Using current schema column name
+            UploadedBy: userId, // Using current schema column name
+            ClientCanSee: true,
+          })
+          .select("DocumentID")
+          .single();
+
+        if (error) {
+          console.error("Error creating document record:", error);
+          // Don't throw here - S3 upload was successful, just log the DB error
+          console.warn(
+            "Document uploaded to S3 but database record creation failed",
+          );
+          return { success: true, documentId: `temp-client-${Date.now()}` };
+        }
+
+        console.log(
+          "Client document record created successfully:",
+          data.DocumentID,
+        );
+        return { success: true, documentId: data.DocumentID };
+      } catch (dbError) {
+        console.error("Database operation failed:", dbError);
+        // S3 upload was successful, so we still return success
+        return { success: true, documentId: `temp-client-${Date.now()}` };
       }
-      */
-
-      return { success: true, documentId: `temp-client-${Date.now()}` };
     } catch (error) {
       console.error("Error in uploadDocument:", error);
       return {
