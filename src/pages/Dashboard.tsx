@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  DocumentCheckIcon, 
-  UserIcon, 
+import {
+  DocumentCheckIcon,
+  UserIcon,
   CloudArrowUpIcon,
   BanknotesIcon,
   ChartBarIcon,
@@ -12,15 +12,29 @@ import {
 import FilterBar from '../components/FilterBar';
 import StatusCard from '../components/StatusCard';
 import UploadZone from '../components/UploadZone';
+import { useClientData } from '../hooks/useClientData';
 
 export default function Dashboard() {
   const [selectedJob, setSelectedJob] = useState('2025 Tax Return');
   const [selectedYear, setSelectedYear] = useState('2025');
-  const [selectedClient, setSelectedClient] = useState('John & Jane Doe');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Document status - can be 'complete' or 'pending'
   const [documentStatus, setDocumentStatus] = useState<'complete' | 'pending'>('pending');
+
+  // Use client data hook
+  const {
+    jobs,
+    documents,
+    messages,
+    selectedClient,
+    loadingJobs,
+    loadingDocuments,
+    loadingMessages,
+    jobsError,
+    documentsError,
+    messagesError
+  } = useClientData();
 
   // Sample list of accountants
   const accountants = [
@@ -32,15 +46,26 @@ export default function Dashboard() {
 
   const toggleModal = () => setIsModalOpen(!isModalOpen);
 
+  // Show message if no client is selected
+  if (!selectedClient) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <UserIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Client Selected</h2>
+          <p className="text-slate-600">Please select a client profile from the sidebar to view your dashboard.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto">
-      <FilterBar 
+      <FilterBar
         selectedJob={selectedJob}
         setSelectedJob={setSelectedJob}
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
-        selectedClient={selectedClient}
-        setSelectedClient={setSelectedClient}
       />
 
       {/* Main Status Banner */}
@@ -77,29 +102,29 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <StatusCard
           icon={DocumentCheckIcon}
-          title="Documents Received"
-          status={documentStatus === 'complete' ? 'Complete' : 'Pending'}
-          statusColor={documentStatus === 'complete' ? 'emerald' : 'amber'}
-          description={documentStatus === 'complete' ? 'All required documents uploaded' : 'Awaiting additional documents'}
-          count={documentStatus === 'complete' ? '12/12' : '3 Pending'}
-        />
-        
-        <StatusCard
-          icon={UserIcon}
-          title="Assigned Accountants"
-          status="Active"
-          statusColor="blue"
-          description={`${accountants.length} Accountants Assigned`}
-          action="View All"
-          onClick={toggleModal}
+          title="Documents"
+          status={loadingDocuments ? 'Loading...' : documentsError ? 'Error' : 'Available'}
+          statusColor={loadingDocuments ? 'slate' : documentsError ? 'red' : documents.length > 0 ? 'emerald' : 'amber'}
+          description={loadingDocuments ? 'Loading documents...' : documentsError ? 'Failed to load documents' : `${documents.length} documents uploaded`}
+          count={loadingDocuments ? '...' : `${documents.length}`}
         />
 
         <StatusCard
           icon={ChartBarIcon}
-          title="Tax Preparation"
-          status="In Review"
-          statusColor="amber"
-          description="Documents under review by accountant"
+          title="Active Jobs"
+          status={loadingJobs ? 'Loading...' : jobsError ? 'Error' : 'Active'}
+          statusColor={loadingJobs ? 'slate' : jobsError ? 'red' : jobs.length > 0 ? 'blue' : 'amber'}
+          description={loadingJobs ? 'Loading jobs...' : jobsError ? 'Failed to load jobs' : `${jobs.length} active jobs`}
+          count={loadingJobs ? '...' : `${jobs.length}`}
+        />
+
+        <StatusCard
+          icon={UserIcon}
+          title="Messages"
+          status={loadingMessages ? 'Loading...' : messagesError ? 'Error' : 'Available'}
+          statusColor={loadingMessages ? 'slate' : messagesError ? 'red' : messages.length > 0 ? 'emerald' : 'amber'}
+          description={loadingMessages ? 'Loading messages...' : messagesError ? 'Failed to load messages' : `${messages.length} messages`}
+          count={loadingMessages ? '...' : `${messages.length}`}
         />
       </div>
 

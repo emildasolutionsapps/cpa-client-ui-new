@@ -2,10 +2,29 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session, AuthError } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
+// Types for client data
+interface Client {
+  ClientID: string
+  ClientName: string
+  ClientCode: string
+  ClientType?: string
+  ClientStatus?: string
+  Email?: string
+  Phone?: string
+  Address?: string
+}
+
 interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
+  // Client switching functionality
+  availableClients: Client[]
+  selectedClientId: string | null
+  selectedClient: Client | null
+  setSelectedClient: (clientId: string) => void
+  loadingClients: boolean
+  // Auth methods
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<{ error: AuthError | null }>
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>
@@ -22,21 +41,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Client switching state
+  const [availableClients, setAvailableClients] = useState<Client[]>([])
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [loadingClients, setLoadingClients] = useState(false)
+
+  // Function to fetch user's permitted clients
+  const fetchUserClients = async (userId: string) => {
+    setLoadingClients(true)
+    try {
+      // Query UserClientPermissions with JOIN to Clients table
+      const { data, error } = await supabase
+        .from('UserClientPermissions')
+        .select(`
+          ClientID,
+          Clients!inner (
+            ClientID,
+            ClientName,
+            ClientCode,
+            ClientType,
+            ClientStatus,
+            Email,
+            Phone,
+            Address
+          )
+        `)
+        .eq('UserID', userId)
+
+      if (error) {
+        console.error('Error fetching user clients:', error)
+        return
+      }
+
+      // Extract client data from the join result
+      const clients = data?.map(item => item.Clients).filter(Boolean) || []
+      setAvailableClients(clients)
+
+      // Set default selected client (first one)
+      if (clients.length > 0 && !selectedClientId) {
+        const defaultClient = clients[0]
+        setSelectedClientId(defaultClient.ClientID)
+        setSelectedClient(defaultClient)
+      }
+    } catch (error) {
+      console.error('Error in fetchUserClients:', error)
+    } finally {
+      setLoadingClients(false)
+    }
+  }
+
+  // Function to handle client switching
+  const handleSetSelectedClient = (clientId: string) => {
+    const client = availableClients.find(c => c.ClientID === clientId)
+    if (client) {
+      setSelectedClientId(clientId)
+      setSelectedClient(client)
+    }
+  }
+
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+
+      // If user is logged in, fetch their permitted clients
+      if (session?.user) {
+        fetchUserClients(session.user.id)
+      }
     })
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event, session?.user?.email)
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+
+      // If user logged in, fetch their clients
+      if (session?.user) {
+        fetchUserClients(session.user.id)
+      } else {
+        // Clear client data on logout
+        setAvailableClients([])
+        setSelectedClientId(null)
+        setSelectedClient(null)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -126,6 +220,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     loading,
+    // Client switching functionality
+    availableClients,
+    selectedClientId,
+    selectedClient,
+    setSelectedClient: handleSetSelectedClient,
+    loadingClients,
+    // Auth methods
     signIn,
     signOut,
     resetPassword,

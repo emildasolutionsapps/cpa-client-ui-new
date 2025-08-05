@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LockClosedIcon, EyeIcon, EyeSlashIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
 export default function SetPassword() {
   const [password, setPassword] = useState('')
@@ -12,19 +13,97 @@ export default function SetPassword() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  
+  const [sessionLoading, setSessionLoading] = useState(true)
+  const [hasValidSession, setHasValidSession] = useState(false)
+
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { updatePassword } = useAuth()
+  const { updatePassword, user } = useAuth()
 
   useEffect(() => {
-    // Check if we have the required tokens in the URL
-    const accessToken = searchParams.get('access_token')
-    const refreshToken = searchParams.get('refresh_token')
-    
-    if (!accessToken || !refreshToken) {
-      setError('Invalid or expired link. Please request a new password reset.')
+    const handleMagicLinkAuth = async () => {
+      setSessionLoading(true)
+      setError('')
+
+      try {
+        // Log all URL parameters for debugging
+        const allParams = Object.fromEntries(searchParams.entries())
+        console.log('URL parameters:', allParams)
+
+        // Check if this is a magic link with token and type parameters
+        const token = searchParams.get('token')
+        const type = searchParams.get('type')
+
+        // Also check for other possible parameter names
+        const accessToken = searchParams.get('access_token')
+        const refreshToken = searchParams.get('refresh_token')
+
+        if (token && type === 'magiclink') {
+          console.log('Processing magic link authentication with token:', token)
+
+          // Verify the magic link token with Supabase
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'magiclink'
+          })
+
+          if (error) {
+            console.error('Magic link verification error:', error)
+            setError('Invalid or expired link. Please request a new invitation.')
+            setHasValidSession(false)
+          } else if (data.user) {
+            console.log('Magic link verified successfully:', data.user)
+            setHasValidSession(true)
+            setError('')
+          } else {
+            setError('Authentication failed. Please request a new invitation.')
+            setHasValidSession(false)
+          }
+        } else if (accessToken && refreshToken) {
+          console.log('Processing magic link with access/refresh tokens')
+
+          // Set the session using the tokens
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
+
+          if (error) {
+            console.error('Session setup error:', error)
+            setError('Invalid or expired link. Please request a new invitation.')
+            setHasValidSession(false)
+          } else if (data.user) {
+            console.log('Session established successfully:', data.user)
+            setHasValidSession(true)
+            setError('')
+          } else {
+            setError('Authentication failed. Please request a new invitation.')
+            setHasValidSession(false)
+          }
+        } else {
+          // Check if user is already authenticated (maybe they refreshed the page)
+          const { data: { session } } = await supabase.auth.getSession()
+
+          if (session && session.user) {
+            console.log('Existing session found:', session.user)
+            setHasValidSession(true)
+            setError('')
+          } else {
+            console.log('No valid authentication found in URL or session')
+            setError('Invalid or expired link. Please request a new invitation.')
+            setHasValidSession(false)
+          }
+        }
+      } catch (err) {
+        console.error('Error handling magic link:', err)
+        setError('An error occurred while processing the link. Please try again.')
+        setHasValidSession(false)
+      } finally {
+        setSessionLoading(false)
+      }
     }
+
+    handleMagicLinkAuth()
   }, [searchParams])
 
   const validatePassword = (password: string) => {
@@ -51,6 +130,13 @@ export default function SetPassword() {
     setLoading(true)
     setError('')
 
+    // Check if we have a valid session
+    if (!hasValidSession) {
+      setError('Auth session missing! Please click the invitation link again.')
+      setLoading(false)
+      return
+    }
+
     if (!password || !confirmPassword) {
       setError('Please fill in all fields')
       setLoading(false)
@@ -76,9 +162,10 @@ export default function SetPassword() {
         setError(error.message)
       } else {
         setSuccess(true)
-        // Redirect to login after 3 seconds
+        // For new client users, redirect to dashboard after password setup
+        // They're already authenticated via the magic link
         setTimeout(() => {
-          navigate('/login')
+          navigate('/dashboard')
         }, 3000)
       }
     } catch {
@@ -88,16 +175,36 @@ export default function SetPassword() {
     }
   }
 
-  if (success) {
+  // Show loading state while processing magic link
+  if (sessionLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center p-4">
-        <motion.div 
+        <motion.div
           className="w-full max-w-md text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <motion.div 
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Processing Invitation...</h1>
+          <p className="text-slate-600">Please wait while we verify your invitation link.</p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center p-4">
+        <motion.div
+          className="w-full max-w-md text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <motion.div
             className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl mx-auto mb-4 flex items-center justify-center"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -106,8 +213,34 @@ export default function SetPassword() {
             <CheckCircleIcon className="w-8 h-8 text-white" />
           </motion.div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Password Set Successfully!</h1>
-          <p className="text-slate-600 mb-4">Your password has been updated. You will be redirected to the login page shortly.</p>
+          <p className="text-slate-600 mb-4">Your password has been updated. You will be redirected to the dashboard shortly.</p>
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // Show error state if no valid session
+  if (!hasValidSession) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center p-4">
+        <motion.div
+          className="w-full max-w-md text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="w-16 h-16 bg-gradient-to-br from-red-600 to-red-700 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+            <LockClosedIcon className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Invalid Link</h1>
+          <p className="text-slate-600 mb-4">{error}</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go to Login
+          </button>
         </motion.div>
       </div>
     )
@@ -115,14 +248,14 @@ export default function SetPassword() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         className="w-full max-w-md"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
         <div className="text-center mb-8">
-          <motion.div 
+          <motion.div
             className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mx-auto mb-4 flex items-center justify-center"
             animate={{ rotate: [0, 5, -5, 0] }}
             transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}

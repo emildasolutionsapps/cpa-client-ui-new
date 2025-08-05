@@ -8,20 +8,33 @@ import {
   VideoCameraIcon
 } from '@heroicons/react/24/outline';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
+import { useClientData } from '../hooks/useClientData';
 
 export default function Messages() {
   const [message, setMessage] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAccountant, setSelectedAccountant] = useState('Sarah Mitchell, CPA');
-  const [selectedClient, setSelectedClient] = useState('John & Jane Doe');
 
-  // Sample client profiles
-  const clientProfiles = [
-    'John & Jane Doe',
-    'John Doe (Individual)',
-    'Jane Doe (Individual)',
-    'ABC Corporation'
-  ];
+  // Use client data hook
+  const {
+    messages: clientMessages,
+    selectedClient,
+    loadingMessages,
+    messagesError
+  } = useClientData();
+
+  // Show message if no client is selected
+  if (!selectedClient) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <UserIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Client Selected</h2>
+          <p className="text-slate-600">Please select a client profile from the sidebar to view messages.</p>
+        </div>
+      </div>
+    )
+  }
 
   // Sample list of accountants
   const accountants = [
@@ -54,8 +67,8 @@ export default function Messages() {
     ]
   };
 
-  // Get messages for the currently selected client
-  const messages = messagesByClient[selectedClient] || [];
+  // Get messages for the currently selected client (using sample data for now)
+  const messages = messagesByClient[selectedClient?.ClientName || ''] || [];
 
   const toggleModal = () => setIsModalOpen(!isModalOpen);
 

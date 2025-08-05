@@ -22,6 +22,13 @@ A secure client portal for VVV CPA PC with comprehensive authentication and mult
 - **Messaging**: Communicate with accountants
 - **Profile Management**: Update profile and security settings
 
+### Client Management System
+- **Client Profile Switcher**: Dynamic dropdown to switch between permitted clients
+- **Permission-Based Access**: Users only see clients they have permission to access
+- **Dynamic Data Loading**: All data automatically filters based on selected client
+- **Real-time Updates**: Data refreshes when switching between client profiles
+- **Secure Multi-Client Support**: Each user can manage multiple client profiles
+
 ## Setup Instructions
 
 ### 1. Prerequisites
@@ -92,6 +99,54 @@ A secure client portal for VVV CPA PC with comprehensive authentication and mult
 6. User creates new password
 7. User is redirected to login page
 
+## Client Switching Architecture
+
+### Database Schema Requirements
+The client switching system requires the following database tables:
+
+```sql
+-- Users table (managed by Supabase Auth)
+Users (
+  UserID uuid PRIMARY KEY,
+  FullName text,
+  Email text UNIQUE,
+  UserType text,
+  IsActive boolean
+)
+
+-- Clients table
+Clients (
+  ClientID uuid PRIMARY KEY,
+  ClientName text,
+  ClientCode text UNIQUE,
+  ClientType text,
+  ClientStatus text,
+  Email text,
+  Phone text,
+  Address text
+)
+
+-- UserClientPermissions table (links users to clients they can access)
+UserClientPermissions (
+  PermissionID uuid PRIMARY KEY,
+  UserID uuid REFERENCES Users(UserID),
+  ClientID uuid REFERENCES Clients(ClientID),
+  UNIQUE(UserID, ClientID)
+)
+```
+
+### Implementation Flow
+1. **Authentication Check**: On app load, checks for active Supabase session
+2. **Permission Loading**: Fetches user's permitted clients from `UserClientPermissions` table
+3. **Client Selection**: Provides dropdown to switch between permitted clients
+4. **Dynamic Data Loading**: All data queries are filtered by the selected client ID
+
+### Key Components
+- **AuthContext**: Enhanced with client switching functionality
+- **useClientData Hook**: Manages client-specific data loading
+- **DataService**: Handles all client-filtered database queries
+- **Client Switcher UI**: Dropdown in sidebar for client selection
+
 ## Security Features
 
 - **Row Level Security (RLS)**: Implement RLS policies in Supabase for data protection
@@ -100,6 +155,7 @@ A secure client portal for VVV CPA PC with comprehensive authentication and mult
 - **MFA Protection**: TOTP-based multi-factor authentication
 - **Session Management**: Secure session handling with automatic cleanup
 - **Protected Routes**: Client-side route protection
+- **Client-Based Data Isolation**: Users only access data for permitted clients
 - **HTTPS Only**: Production deployment should use HTTPS only
 
 ## Development
@@ -109,22 +165,29 @@ A secure client portal for VVV CPA PC with comprehensive authentication and mult
 src/
 ├── components/          # Reusable UI components
 │   ├── ProtectedRoute.tsx
-│   └── Sidebar.tsx
+│   ├── Sidebar.tsx     # Enhanced with client switcher
+│   ├── FilterBar.tsx   # Updated to use client context
+│   ├── StatusCard.tsx
+│   └── UploadZone.tsx
 ├── contexts/           # React contexts
-│   └── AuthContext.tsx
+│   └── AuthContext.tsx # Enhanced with client switching
+├── hooks/              # Custom React hooks
+│   └── useClientData.ts # Client-specific data management
+├── services/           # Data services
+│   └── dataService.ts  # Client-filtered database queries
 ├── lib/               # Utilities and configurations
 │   └── supabase.ts
-├── pages/             # Page components
+├── pages/             # Page components (all updated for client switching)
 │   ├── Login.tsx
 │   ├── ForgotPassword.tsx
 │   ├── SetPassword.tsx
 │   ├── MFASetup.tsx
 │   ├── MFAVerify.tsx
-│   ├── Dashboard.tsx
-│   ├── Documents.tsx
+│   ├── Dashboard.tsx   # Shows client-specific data
+│   ├── Documents.tsx   # Client-filtered documents
 │   ├── Signatures.tsx
-│   ├── Billing.tsx
-│   ├── Messages.tsx
+│   ├── Billing.tsx     # Client-specific billing
+│   ├── Messages.tsx    # Client-filtered messages
 │   └── Profile.tsx
 └── App.tsx            # Main application component
 ```

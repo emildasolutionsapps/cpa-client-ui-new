@@ -8,7 +8,8 @@ import {
   ChatBubbleLeftRightIcon,
   UserIcon,
   BuildingOfficeIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,7 +24,14 @@ const navigation = [
 ];
 
 export default function Sidebar() {
-  const { user, signOut } = useAuth();
+  const {
+    user,
+    signOut,
+    availableClients,
+    selectedClient,
+    setSelectedClient,
+    loadingClients
+  } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -54,6 +62,35 @@ export default function Sidebar() {
             <p className="text-sm text-slate-500">Client Portal</p>
           </div>
         </div>
+
+        {/* Client Profile Switcher */}
+        {availableClients.length > 0 && (
+          <div className="mb-6">
+            <label className="block text-xs font-medium text-slate-600 mb-2">
+              Client Profile
+            </label>
+            <div className="relative">
+              <select
+                value={selectedClient?.ClientID || ''}
+                onChange={(e) => setSelectedClient(e.target.value)}
+                disabled={loadingClients}
+                className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 disabled:opacity-50"
+              >
+                {availableClients.map((client) => (
+                  <option key={client.ClientID} value={client.ClientID}>
+                    {client.ClientName}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            </div>
+            {selectedClient && (
+              <p className="text-xs text-slate-500 mt-1">
+                Code: {selectedClient.ClientCode}
+              </p>
+            )}
+          </div>
+        )}
 
         <nav className="space-y-2">
           {navigation.map((item) => (

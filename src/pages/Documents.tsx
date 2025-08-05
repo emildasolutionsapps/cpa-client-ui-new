@@ -11,8 +11,10 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
   FolderOpenIcon,
-  LockClosedIcon
+  LockClosedIcon,
+  UserIcon
 } from '@heroicons/react/24/outline';
+import { useClientData } from '../hooks/useClientData';
 
 const tabs = [
   { id: 'requested', name: 'Requested Documents', icon: DocumentIcon, color: 'blue' },
@@ -47,6 +49,27 @@ const signedDocs = [
 
 export default function Documents() {
   const [activeTab, setActiveTab] = useState('requested');
+
+  // Use client data hook
+  const {
+    documents,
+    selectedClient,
+    loadingDocuments,
+    documentsError
+  } = useClientData();
+
+  // Show message if no client is selected
+  if (!selectedClient) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <UserIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Client Selected</h2>
+          <p className="text-slate-600">Please select a client profile from the sidebar to view documents.</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleAddDocument = () => {
     // Handle document upload

@@ -1,24 +1,27 @@
 import React from 'react';
 import { ChevronDownIcon, UserIcon, CalendarIcon, BriefcaseIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FilterBarProps {
   selectedJob: string;
   setSelectedJob: (job: string) => void;
   selectedYear: string;
   setSelectedYear: (year: string) => void;
-  selectedClient: string;
-  setSelectedClient: (client: string) => void;
 }
 
 export default function FilterBar({
   selectedJob,
   setSelectedJob,
   selectedYear,
-  setSelectedYear,
-  selectedClient,
-  setSelectedClient
+  setSelectedYear
 }: FilterBarProps) {
+  const {
+    availableClients,
+    selectedClient,
+    setSelectedClient,
+    loadingClients
+  } = useAuth();
   return (
     <motion.div
       className="mb-8"
@@ -52,14 +55,20 @@ export default function FilterBar({
           </div>
           <div className="relative">
             <select
-              value={selectedClient}
+              value={selectedClient?.ClientID || ''}
               onChange={(e) => setSelectedClient(e.target.value)}
-              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
+              disabled={loadingClients || availableClients.length === 0}
+              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 disabled:opacity-50"
             >
-              <option>John & Jane Doe</option>
-              <option>John Doe (Individual)</option>
-              <option>Jane Doe (Individual)</option>
-              <option>ABC Corporation</option>
+              {availableClients.length === 0 ? (
+                <option value="">No clients available</option>
+              ) : (
+                availableClients.map((client) => (
+                  <option key={client.ClientID} value={client.ClientID}>
+                    {client.ClientName}
+                  </option>
+                ))
+              )}
             </select>
             <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
           </div>
@@ -138,7 +147,7 @@ export default function FilterBar({
         <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2 rounded-full border border-blue-100">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
           <span className="text-sm font-medium text-slate-700">
-            Viewing: {selectedClient} • {selectedYear} • {selectedJob}
+            Viewing: {selectedClient?.ClientName || 'No client selected'} • {selectedYear} • {selectedJob}
           </span>
         </div>
       </motion.div>

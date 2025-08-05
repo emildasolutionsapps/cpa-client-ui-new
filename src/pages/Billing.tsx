@@ -9,9 +9,11 @@ import {
   EyeIcon,
   ShieldCheckIcon,
   StarIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  UserIcon
 } from '@heroicons/react/24/outline';
 import { CreditCardIcon as CreditCardSolidIcon } from '@heroicons/react/24/solid';
+import { useClientData } from '../hooks/useClientData';
 
 // Sample payment methods
 const paymentMethods = [
@@ -81,6 +83,27 @@ const receipts = [
 
 export default function Billing() {
   const [showAddCard, setShowAddCard] = useState(false);
+
+  // Use client data hook
+  const {
+    billing,
+    selectedClient,
+    loadingBilling,
+    billingError
+  } = useClientData();
+
+  // Show message if no client is selected
+  if (!selectedClient) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <UserIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Client Selected</h2>
+          <p className="text-slate-600">Please select a client profile from the sidebar to view billing information.</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleDownload = (receipt: any) => {
     // In a real app, this would trigger a download
