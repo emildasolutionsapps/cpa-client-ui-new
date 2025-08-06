@@ -3,6 +3,16 @@
 ## Overview
 This document summarizes the implementation of the Client Portal core functionality as specified in the AI instructions. The implementation includes authentication, client switching, and dynamic data loading based on the selected client profile.
 
+## 🔄 Recent Updates (August 2025)
+**IMPORTANT**: The implementation has been updated to address several critical issues found during review:
+
+### Issues Fixed:
+1. **Table Usage Correction**: Updated from `UserClientPermissions` to `UserClientAccess` table
+2. **Active Access Filtering**: Added filtering for `IsActive = true` and `RevokedAt IS NULL`
+3. **Enhanced Error Handling**: Added comprehensive error states and user feedback
+4. **Better Loading States**: Improved loading indicators and user experience
+5. **Edge Case Handling**: Added handling for users with no client access
+
 ## ✅ Completed Features
 
 ### 1. Initial Application Load & Authentication Check
@@ -21,10 +31,13 @@ This document summarizes the implementation of the Client Portal core functional
 - Automatic loading of permitted clients after successful authentication
 - Storage of client array in global state
 
-**Database Query Implemented:**
+**Database Query Implemented (UPDATED):**
 ```sql
-SELECT 
+SELECT
   ClientID,
+  IsActive,
+  GrantedAt,
+  RevokedAt,
   Clients!inner (
     ClientID,
     ClientName,
@@ -35,8 +48,10 @@ SELECT
     Phone,
     Address
   )
-FROM UserClientPermissions
+FROM UserClientAccess
 WHERE UserID = [current_user_id]
+  AND IsActive = true
+  AND RevokedAt IS NULL
 ```
 
 ### 3. Client Profile Switcher UI
@@ -73,21 +88,23 @@ WHERE UserID = [current_user_id]
 
 ## 🏗️ Architecture Implementation
 
-### Enhanced AuthContext
+### Enhanced AuthContext (UPDATED)
 ```typescript
 interface AuthContextType {
   // Existing auth properties
   user: User | null
   session: Session | null
   loading: boolean
-  
-  // New client switching properties
+
+  // Enhanced client switching properties
   availableClients: Client[]
   selectedClientId: string | null
   selectedClient: Client | null
   setSelectedClient: (clientId: string) => void
   loadingClients: boolean
-  
+  clientsError: string | null          // NEW: Error handling
+  hasClientAccess: boolean             // NEW: Access status
+
   // Auth methods
   signIn, signOut, resetPassword, etc.
 }
@@ -126,17 +143,21 @@ export function useClientData() {
 }
 ```
 
-## 🔒 Security Implementation
+## 🔒 Security Implementation (ENHANCED)
 
 ### Database Security
 - All queries respect Row Level Security (RLS) policies
 - User can only access clients they have permissions for
 - Automatic filtering prevents unauthorized data access
+- **NEW**: Active access validation (`IsActive = true`, `RevokedAt IS NULL`)
+- **NEW**: Proper error handling for security violations
 
 ### Client Isolation
 - Each user sees only their permitted clients
 - Data queries are automatically scoped to selected client
 - No cross-client data leakage possible
+- **NEW**: Enhanced validation of client access status
+- **NEW**: Graceful handling of revoked access
 
 ## 📁 File Structure
 
@@ -177,19 +198,24 @@ VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-## 🚀 Next Steps for Full Deployment
+## 🚀 Next Steps for Full Deployment (UPDATED)
 
 1. **Database Setup**: Ensure the required tables exist:
    - `Users` (managed by Supabase Auth)
-   - `Clients` 
-   - `UserClientPermissions`
+   - `Clients`
+   - `UserClientAccess` (**UPDATED**: Use this instead of UserClientPermissions)
    - `Jobs`, `Documents`, `Messages` (for data display)
 
 2. **Environment Configuration**: Set up Supabase environment variables
 
-3. **User Data**: Create test users and client permissions in the database
+3. **User Data**: Create test users and client access in the database
+   - Ensure `IsActive = true` for active access
+   - Set `RevokedAt = NULL` for non-revoked access
 
 4. **Testing**: Test the client switching functionality with real data
+   - Test with users having multiple client access
+   - Test error scenarios (no access, revoked access)
+   - Verify data switching between clients
 
 ## 📋 Implementation Checklist
 
@@ -214,3 +240,60 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 6. **Professional UI**: Clean, intuitive client switching interface
 
 The implementation fully satisfies the requirements specified in the AI instructions and provides a robust foundation for a multi-client CPA portal system.
+
+## 🐛 Issues Found and Fixed (August 2025)
+
+### Issue 1: Incorrect Table Usage
+**Problem**: The original implementation used `UserClientPermissions` table, but the database also contained a more comprehensive `UserClientAccess` table with additional fields like `IsActive`, `RevokedAt`, `RevokedBy`.
+
+**Solution**: Updated AuthContext to use `UserClientAccess` table with proper filtering for active access only.
+
+### Issue 2: Missing Active Status Filtering
+**Problem**: Users could potentially see revoked or inactive client access.
+
+**Solution**: Added filtering conditions:
+- `IsActive = true`
+- `RevokedAt IS NULL`
+
+### Issue 3: Poor Error Handling
+**Problem**: Limited error handling for edge cases like users with no client access or database errors.
+
+**Solution**: Added comprehensive error states:
+- `clientsError` for error messages
+- `hasClientAccess` for access status
+- User-friendly error messages in UI
+- Retry functionality for failed requests
+
+### Issue 4: Inadequate Loading States
+**Problem**: Basic loading states without proper user feedback.
+
+**Solution**: Enhanced loading states:
+- Detailed loading messages
+- Different states for different scenarios
+- Better visual indicators
+
+### Issue 5: Edge Case Handling
+**Problem**: No handling for users with zero client access.
+
+**Solution**: Added proper handling:
+- Clear messaging for no access scenarios
+- Graceful degradation of UI
+- Contact administrator messaging
+
+## 🧪 Testing Verification
+
+### Test Data Available:
+- User `dev.emildasolutions@gmail.com` has access to 2 clients:
+  - `ineazy` (Code: I-25-201) - 1 job
+  - `safderkbta` (Code: S-25-506) - 7 jobs
+- Both clients have active jobs and documents for testing data switching
+
+### Manual Testing Required:
+1. Login with test user
+2. Verify client switcher shows both clients
+3. Switch between clients and verify:
+   - Dashboard data updates
+   - Job counts change appropriately
+   - Documents filter correctly
+   - Messages are client-specific
+4. Test error scenarios with users having no access
