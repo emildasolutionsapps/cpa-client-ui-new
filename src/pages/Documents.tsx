@@ -144,19 +144,28 @@ export default function Documents() {
       if (result.success) {
         // Update request status if this was for a specific request
         if (requestId) {
-          await DocumentService.updateDocumentRequestStatus(requestId, 'uploaded');
+          console.log('Updating document request status for:', requestId);
+          const statusUpdateResult = await DocumentService.updateDocumentRequestStatus(requestId, 'uploaded');
+          if (!statusUpdateResult.success) {
+            console.error('Failed to update request status:', statusUpdateResult.error);
+          } else {
+            console.log('Successfully updated request status to uploaded');
+          }
         }
 
         // Reload data to show updated state
+        console.log('Reloading document requests and documents...');
         const [requestsResult, documentsResult] = await Promise.all([
           DocumentService.getDocumentRequests(selectedClientId),
           DocumentService.getClientDocuments(selectedClientId)
         ]);
 
         if (!requestsResult.error) {
+          console.log('Updated document requests:', requestsResult.data);
           setDocumentRequests(requestsResult.data || []);
         }
         if (!documentsResult.error) {
+          console.log('Updated client documents:', documentsResult.data);
           setClientDocuments(documentsResult.data || []);
         }
 
@@ -189,36 +198,7 @@ export default function Documents() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getStatusBadge = (status: string) => {
-    const badges = {
-      uploaded: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      pending: 'bg-amber-100 text-amber-800 border-amber-200',
-      completed: 'bg-green-100 text-green-800 border-green-200',
-      cancelled: 'bg-red-100 text-red-800 border-red-200',
-      available: 'bg-blue-100 text-blue-800 border-blue-200',
-      processing: 'bg-purple-100 text-purple-800 border-purple-200',
-      signed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      locked: 'bg-slate-100 text-slate-800 border-slate-200',
-    };
 
-    const icons = {
-      uploaded: <CheckCircleIcon className="w-4 h-4" />,
-      pending: <ClockIcon className="w-4 h-4" />,
-      completed: <CheckCircleIcon className="w-4 h-4" />,
-      cancelled: <ExclamationTriangleIcon className="w-4 h-4" />,
-      available: <DocumentIcon className="w-4 h-4" />,
-      processing: <ClockIcon className="w-4 h-4" />,
-      signed: <CheckCircleIcon className="w-4 h-4" />,
-      locked: <LockClosedIcon className="w-4 h-4" />,
-    };
-
-    return (
-      <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${badges[status as keyof typeof badges]}`}>
-        {icons[status as keyof typeof icons]}
-        <span className="capitalize">{status}</span>
-      </span>
-    );
-  };
 
   const getDocumentsByType = (type: string) => {
     return clientDocuments.filter(doc => doc.DocumentType === type);
@@ -288,14 +268,14 @@ export default function Documents() {
                   <ExclamationTriangleIcon className="w-8 h-8 text-red-500 mx-auto mb-2" />
                   <p className="text-red-600">{error}</p>
                 </div>
-              ) : documentRequests.length === 0 ? (
+              ) : documentRequests.filter(request => request.Status === 'pending').length === 0 ? (
                 <div className="text-center py-8">
                   <DocumentIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-600">No document requests at this time</p>
+                  <p className="text-slate-600">No pending document requests</p>
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {documentRequests.map((request) => (
+                  {documentRequests.filter(request => request.Status === 'pending').map((request) => (
                     <motion.div
                       key={request.RequestID}
                       className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200 hover:shadow-xl transition-all duration-300"
@@ -329,7 +309,18 @@ export default function Documents() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-3">
-                          {getStatusBadge(request.Status)}
+                          <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${
+                            request.Status === 'uploaded' || request.Status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : 'bg-amber-100 text-amber-800 border-amber-200'
+                          }`}>
+                            {request.Status === 'uploaded' || request.Status === 'completed' ? (
+                              <CheckCircleIcon className="w-4 h-4" />
+                            ) : (
+                              <ClockIcon className="w-4 h-4" />
+                            )}
+                            <span className="capitalize">{request.Status}</span>
+                          </span>
                           {request.Status === 'pending' && (
                             <div>
                               <input
@@ -371,6 +362,32 @@ export default function Documents() {
                       </div>
                     </motion.div>
                   ))}
+                </div>
+              )}
+
+              {/* Completed Requests Section */}
+              {documentRequests.filter(request => request.Status === 'uploaded' || request.Status === 'completed').length > 0 && (
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-4">Completed Requests</h3>
+                  <div className="grid gap-3">
+                    {documentRequests.filter(request => request.Status === 'uploaded' || request.Status === 'completed').map((request) => (
+                      <div key={request.RequestID} className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
+                            <div>
+                              <h4 className="font-medium text-slate-900">{request.DocumentName}</h4>
+                              <p className="text-sm text-slate-600">{request.Description}</p>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border bg-emerald-100 text-emerald-800 border-emerald-200">
+                            <CheckCircleIcon className="w-4 h-4" />
+                            <span>Completed</span>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -441,7 +458,10 @@ export default function Documents() {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            {getStatusBadge(doc.Status)}
+                            <span className="inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border bg-emerald-100 text-emerald-800 border-emerald-200">
+                              <CheckCircleIcon className="w-4 h-4" />
+                              <span>Uploaded</span>
+                            </span>
                           </div>
                         </div>
                       </motion.div>
@@ -487,7 +507,10 @@ export default function Documents() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-3">
-                          {getStatusBadge(doc.Status)}
+                          <span className="inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border bg-emerald-100 text-emerald-800 border-emerald-200">
+                            <CheckCircleIcon className="w-4 h-4" />
+                            <span>Available</span>
+                          </span>
                           <button className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-xl text-sm font-medium hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2">
                             <ArrowDownTrayIcon className="w-5 h-5" />
                             <span>Download</span>

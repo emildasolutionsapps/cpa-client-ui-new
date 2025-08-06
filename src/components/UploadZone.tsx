@@ -90,6 +90,10 @@ export default function UploadZone({ selectedJobId, selectedJobName }: UploadZon
 
       if (result.success) {
         setUploadStatus('success');
+        // Show success message if provided
+        if (result.message) {
+          console.log('Upload success:', result.message);
+        }
         setTimeout(() => {
           setUploadStatus('idle');
           setUploadProgress(0);

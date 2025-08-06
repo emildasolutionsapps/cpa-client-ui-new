@@ -155,56 +155,97 @@ export class DocumentService {
         userId,
       });
 
-      // Upload file to S3 using the proper client document structure
-      const uploadResult = await uploadClientDocument(
-        file,
-        clientName,
-        clientCode,
-        jobId,
-      );
+      // Try to upload file to S3 using the proper client document structure
+      let uploadResult: any = null;
+      let s3UploadSuccessful = false;
 
-      if (uploadResult.error) {
-        console.error("S3 upload failed:", uploadResult.error);
-        throw new Error(uploadResult.error);
+      try {
+        uploadResult = await uploadClientDocument(
+          file,
+          clientName,
+          clientCode,
+          jobId,
+        );
+
+        if (uploadResult.error) {
+          console.warn(
+            "S3 upload failed, will save to database only:",
+            uploadResult.error,
+          );
+          s3UploadSuccessful = false;
+        } else {
+          console.log("S3 upload successful:", uploadResult.key);
+          s3UploadSuccessful = true;
+        }
+      } catch (s3Error) {
+        console.warn(
+          "S3 upload failed with exception, will save to database only:",
+          s3Error,
+        );
+        s3UploadSuccessful = false;
       }
 
-      console.log("S3 upload successful:", uploadResult.key);
-
-      // Create database record for the uploaded document
+      // Create database record for the document (whether S3 upload succeeded or not)
       try {
+        const documentRecord = {
+          JobID: jobId,
+          FileName: file.name,
+          FileSize: file.size,
+          DocumentType: "client_upload",
+          S3Path: s3UploadSuccessful ? uploadResult.key : null,
+          UploadedBy: userId,
+          ClientCanSee: true,
+        };
+
         const { data, error } = await supabase
           .from("Documents")
-          .insert({
-            JobID: jobId,
-            FileName: file.name, // Using current schema column name
-            FileSize: file.size, // Now available
-            DocumentType: "client_upload",
-            Status: "uploaded", // Now available
-            S3Path: uploadResult.key, // Using current schema column name
-            UploadedBy: userId, // Using current schema column name
-            ClientCanSee: true,
-          })
+          .insert(documentRecord)
           .select("DocumentID")
           .single();
 
         if (error) {
           console.error("Error creating document record:", error);
-          // Don't throw here - S3 upload was successful, just log the DB error
-          console.warn(
-            "Document uploaded to S3 but database record creation failed",
-          );
-          return { success: true, documentId: `temp-client-${Date.now()}` };
+          if (s3UploadSuccessful) {
+            return {
+              success: false,
+              error:
+                "Document uploaded to storage but database record creation failed. Please contact support.",
+            };
+          } else {
+            return {
+              success: false,
+              error: "Both storage upload and database record creation failed.",
+            };
+          }
         }
 
         console.log(
           "Client document record created successfully:",
           data.DocumentID,
         );
-        return { success: true, documentId: data.DocumentID };
+
+        // Return success
+        return {
+          success: true,
+          documentId: data.DocumentID,
+          message: "Document uploaded successfully!",
+        };
       } catch (dbError) {
         console.error("Database operation failed:", dbError);
-        // S3 upload was successful, so we still return success
-        return { success: true, documentId: `temp-client-${Date.now()}` };
+
+        if (s3UploadSuccessful) {
+          return {
+            success: false,
+            error:
+              "Document uploaded to storage but database record creation failed. Please contact support.",
+          };
+        } else {
+          return {
+            success: false,
+            error:
+              "Document upload failed completely. Please check your connection and try again.",
+          };
+        }
       }
     } catch (error) {
       console.error("Error in uploadDocument:", error);
