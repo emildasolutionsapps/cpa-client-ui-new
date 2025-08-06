@@ -12,6 +12,7 @@ import {
 import FilterBar from '../components/FilterBar';
 import StatusCard from '../components/StatusCard';
 import UploadZone from '../components/UploadZone';
+import BadgeDebugger from '../components/BadgeDebugger';
 import { useClientData } from '../hooks/useClientData';
 
 export default function Dashboard() {
@@ -70,6 +71,11 @@ export default function Dashboard() {
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
       />
+
+      {/* Badge Debugger - Development Tool */}
+      <div className="mb-8">
+        <BadgeDebugger />
+      </div>
 
       {/* Main Status Banner */}
       {/* <motion.div 

@@ -13,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { UnreadService } from '../services/unreadService';
+import { UnreadService, badgeEventEmitter } from '../services/unreadService';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -37,29 +37,56 @@ export default function Sidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
 
+  // Debug: Log when unreadCount changes
   useEffect(() => {
-    if (selectedClient?.ClientID) {
+    console.log('Sidebar: Unread count changed to:', unreadCount);
+  }, [unreadCount]);
+
+  // Debug: Log when selectedClient changes
+  useEffect(() => {
+    console.log('Sidebar: Selected client changed to:', selectedClient);
+  }, [selectedClient]);
+
+  useEffect(() => {
+    if (selectedClient?.ClientID && user?.id) {
+      console.log('Sidebar: Setting up subscriptions for client:', selectedClient.ClientID);
       // Load initial unread count
       loadUnreadCount();
 
       // Subscribe to unread updates
       const subscription = UnreadService.subscribeToUnreadUpdates(
         selectedClient.ClientID,
+        user.id,
         (count) => {
+          console.log('Sidebar: Received unread count update:', count);
           setUnreadCount(count);
         }
       );
 
+      // Subscribe to badge update events (for immediate updates when messages are marked as read)
+      const unsubscribeBadgeEvents = badgeEventEmitter.subscribe((clientId) => {
+        if (clientId === selectedClient.ClientID) {
+          console.log('Sidebar: Received badge update event, refreshing count');
+          loadUnreadCount();
+        }
+      });
+
       return () => {
+        console.log('Sidebar: Cleaning up subscriptions for client:', selectedClient?.ClientID);
         UnreadService.unsubscribeFromUnreadUpdates(subscription);
+        unsubscribeBadgeEvents();
       };
     }
-  }, [selectedClient]);
+  }, [selectedClient, user]);
 
   const loadUnreadCount = async () => {
-    if (selectedClient?.ClientID) {
-      const count = await UnreadService.getUnreadCount(selectedClient.ClientID);
+    if (selectedClient?.ClientID && user?.id) {
+      console.log('Sidebar: Loading unread count for client:', selectedClient.ClientID);
+      const count = await UnreadService.getUnreadCount(selectedClient.ClientID, user.id);
+      console.log('Sidebar: Unread count loaded:', count);
       setUnreadCount(count);
+    } else {
+      console.warn('Sidebar: Missing client ID or user ID, cannot load unread count');
     }
   };
 
