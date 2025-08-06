@@ -24,6 +24,8 @@ interface AuthContextType {
   selectedClient: Client | null
   setSelectedClient: (clientId: string) => void
   loadingClients: boolean
+  clientsError: string | null
+  hasClientAccess: boolean
   // Auth methods
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<{ error: AuthError | null }>
@@ -46,16 +48,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [loadingClients, setLoadingClients] = useState(false)
+  const [clientsError, setClientsError] = useState<string | null>(null)
+  const [hasClientAccess, setHasClientAccess] = useState(false)
 
   // Function to fetch user's permitted clients
   const fetchUserClients = async (userId: string) => {
     setLoadingClients(true)
+    setClientsError(null)
+
     try {
-      // Query UserClientPermissions with JOIN to Clients table
+      // Query UserClientAccess with JOIN to Clients table, filtering for active access only
       const { data, error } = await supabase
-        .from('UserClientPermissions')
+        .from('UserClientAccess')
         .select(`
           ClientID,
+          IsActive,
+          GrantedAt,
+          RevokedAt,
           Clients!inner (
             ClientID,
             ClientName,
@@ -68,9 +77,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           )
         `)
         .eq('UserID', userId)
+        .eq('IsActive', true)
+        .is('RevokedAt', null)
 
       if (error) {
         console.error('Error fetching user clients:', error)
+        setClientsError('Failed to load client access. Please try again.')
+        setHasClientAccess(false)
         return
       }
 
@@ -78,14 +91,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const clients = data?.map(item => item.Clients).filter(Boolean) || []
       setAvailableClients(clients)
 
-      // Set default selected client (first one)
-      if (clients.length > 0 && !selectedClientId) {
-        const defaultClient = clients[0]
-        setSelectedClientId(defaultClient.ClientID)
-        setSelectedClient(defaultClient)
+      if (clients.length > 0) {
+        setHasClientAccess(true)
+        // Set default selected client (first one) only if none is currently selected
+        if (!selectedClientId) {
+          const defaultClient = clients[0]
+          setSelectedClientId(defaultClient.ClientID)
+          setSelectedClient(defaultClient)
+        }
+      } else {
+        // Handle case where user has no active client access
+        console.warn('User has no active client access')
+        setHasClientAccess(false)
+        setClientsError('You do not have access to any client portals. Please contact your administrator.')
+        setAvailableClients([])
+        setSelectedClientId(null)
+        setSelectedClient(null)
       }
     } catch (error) {
       console.error('Error in fetchUserClients:', error)
+      setClientsError('An unexpected error occurred while loading client access.')
+      setHasClientAccess(false)
+      setAvailableClients([])
+      setSelectedClientId(null)
+      setSelectedClient(null)
     } finally {
       setLoadingClients(false)
     }
@@ -130,6 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAvailableClients([])
         setSelectedClientId(null)
         setSelectedClient(null)
+        setClientsError(null)
+        setHasClientAccess(false)
       }
     })
 
@@ -226,6 +257,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     selectedClient,
     setSelectedClient: handleSetSelectedClient,
     loadingClients,
+    clientsError,
+    hasClientAccess,
     // Auth methods
     signIn,
     signOut,

@@ -13,6 +13,7 @@ import FilterBar from '../components/FilterBar';
 import StatusCard from '../components/StatusCard';
 import UploadZone from '../components/UploadZone';
 import { useClientData } from '../hooks/useClientData';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Dashboard() {
   const [selectedJobId, setSelectedJobId] = useState<string>('');
@@ -22,6 +23,9 @@ export default function Dashboard() {
 
   // Document status - can be 'complete' or 'pending'
   const [documentStatus, setDocumentStatus] = useState<'complete' | 'pending'>('pending');
+
+  // Use auth context for client access info
+  const { hasClientAccess, clientsError, loadingClients } = useAuth();
 
   // Use client data hook
   const {
@@ -46,6 +50,40 @@ export default function Dashboard() {
   ];
 
   const toggleModal = () => setIsModalOpen(!isModalOpen);
+
+  // Show loading state while checking client access
+  if (loadingClients) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">Loading Client Access</h2>
+          <p className="text-slate-600">Please wait while we load your client information...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error message if there's a client access error
+  if (clientsError) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <UserIcon className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">Client Access Error</h2>
+          <p className="text-slate-600 mb-4">{clientsError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // Show message if no client is selected
   if (!selectedClient) {
