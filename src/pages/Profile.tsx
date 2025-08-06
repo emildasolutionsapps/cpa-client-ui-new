@@ -129,7 +129,7 @@ export default function Profile() {
         </motion.div>
 
         {/* Security Settings Card */}
-        <motion.div
+        {/* <motion.div
           className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -179,10 +179,10 @@ export default function Profile() {
               </button>
             </div>
           </div>
-        </motion.div>
+        </motion.div> */}
 
         {/* Linked Bank Accounts Card */}
-        <motion.div 
+        {/* <motion.div 
           className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -211,7 +211,7 @@ export default function Profile() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </motion.div> */}
 
         {/* Quick Actions Card */}
         <motion.div 

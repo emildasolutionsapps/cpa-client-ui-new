@@ -97,7 +97,7 @@ export default function Signatures() {
         <p className="text-slate-600 mb-8">Review and sign required documents for your tax filing</p>
 
         {/* Progress Summary */}
-        <div className="bg-gradient-to-r from-blue-50 to-emerald-50 rounded-2xl p-6 mb-8 border border-blue-100">
+        {/* <div className="bg-gradient-to-r from-blue-50 to-emerald-50 rounded-2xl p-6 mb-8 border border-blue-100">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-slate-900">Signature Progress</h2>
             <span className="text-2xl font-bold text-blue-600">
@@ -117,7 +117,7 @@ export default function Signatures() {
           <p className="text-sm text-slate-600 mt-2">
             {signatureForms.filter(f => f.status === 'signed').length} of {signatureForms.filter(f => f.required).length} required signatures completed
           </p>
-        </div>
+        </div> */}
 
         {/* Signature Forms */}
         <div className="space-y-4">
