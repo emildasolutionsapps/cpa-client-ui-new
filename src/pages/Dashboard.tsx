@@ -12,6 +12,7 @@ import {
 import FilterBar from '../components/FilterBar';
 import StatusCard from '../components/StatusCard';
 import UploadZone from '../components/UploadZone';
+import BadgeDebugger from '../components/BadgeDebugger';
 import { useClientData } from '../hooks/useClientData';
 import { useAuth } from '../contexts/AuthContext';
 import { useFilters } from '../contexts/FilterContext';
@@ -102,6 +103,11 @@ export default function Dashboard() {
   return (
     <div className="max-w-7xl mx-auto">
       <FilterBar />
+
+      {/* Badge Debugger - Development Tool */}
+      <div className="mb-8">
+        <BadgeDebugger />
+      </div>
 
       {/* Main Status Banner */}
       {/* <motion.div 

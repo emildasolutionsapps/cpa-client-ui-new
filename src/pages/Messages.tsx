@@ -53,12 +53,20 @@ const Messages: React.FC = () => {
     try {
       const data = await ChatService.getMessages(selectedClientId);
       setMessages(data);
-      // Mark messages as read using the current user's ID for this client's conversation
-      await UnreadService.markAsRead(user.id, selectedClientId, user.email);
+
+      // Mark messages as read and log the action
+      console.log('Client Messages: Marking messages as read after loading');
+      if (user?.id) {
+        await UnreadService.markAsRead(selectedClientId, user.id);
+        console.log('Client Messages: Messages marked as read successfully');
+      } else {
+        console.warn('Client Messages: No user ID available, skipping mark as read');
+      }
+
       // Scroll after loading messages
       setTimeout(scrollToBottom, 200);
     } catch (err) {
-      console.error('Error loading messages:', err);
+      console.error('Client Messages: Error loading messages:', err);
     } finally {
       setLoading(false);
     }
@@ -82,7 +90,7 @@ const Messages: React.FC = () => {
       try {
         subscription = await ChatService.subscribeToMessages(
           selectedClientId,
-          newMessage => {
+          async newMessage => {
             console.log('Client Messages: Received new message via subscription:', newMessage);
             setMessages(prev => {
               // Check if message already exists to avoid duplicates
@@ -95,6 +103,18 @@ const Messages: React.FC = () => {
               return [...prev, newMessage];
             });
             scrollToBottom();
+
+            // If the new message is from admin (not from current client), mark it as read immediately
+            // since the user is actively viewing the conversation
+            if (newMessage.senderType !== 'client' && user?.id) {
+              console.log('Client Messages: New admin message received, marking as read');
+              try {
+                await UnreadService.markAsRead(selectedClientId, user.id);
+                console.log('Client Messages: New admin message marked as read');
+              } catch (error) {
+                console.error('Client Messages: Error marking new admin message as read:', error);
+              }
+            }
           }
         );
       } catch (error) {

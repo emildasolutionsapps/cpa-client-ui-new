@@ -5,6 +5,27 @@ export interface UnreadCount {
   count: number;
 }
 
+// Simple event emitter for badge updates
+class BadgeEventEmitter {
+  private listeners: ((clientId: string) => void)[] = [];
+
+  subscribe(callback: (clientId: string) => void) {
+    this.listeners.push(callback);
+    return () => {
+      const index = this.listeners.indexOf(callback);
+      if (index > -1) {
+        this.listeners.splice(index, 1);
+      }
+    };
+  }
+
+  emit(clientId: string) {
+    this.listeners.forEach((callback) => callback(clientId));
+  }
+}
+
+export const badgeEventEmitter = new BadgeEventEmitter();
+
 export class UnreadService {
   // Ensure user exists in Users table (for portal users)
   private static async ensureUserExists(
@@ -52,8 +73,15 @@ export class UnreadService {
   }
 
   // Get unread message count for a client's conversation
-  static async getUnreadCount(clientId: string): Promise<number> {
+  static async getUnreadCount(
+    clientId: string,
+    userId: string,
+  ): Promise<number> {
     try {
+      console.log(
+        `Client UnreadService: Getting unread count for client ${clientId}`,
+      );
+
       // First get the channel for this client
       const { data: channel, error: channelError } = await supabase
         .from("ChatChannels")
@@ -62,8 +90,13 @@ export class UnreadService {
         .single();
 
       if (channelError || !channel) {
+        console.log("Client UnreadService: No channel found for client");
         return 0;
       }
+
+      console.log(
+        `Client UnreadService: Found channel ${channel.ChannelID} for client`,
+      );
 
       // Count messages in this channel that:
       // 1. Were not sent by the current client
@@ -75,35 +108,44 @@ export class UnreadService {
           MessageReadStatus!left(UserID)
         `)
         .eq("ChannelID", channel.ChannelID)
-        .neq("SenderUserID", clientId)
+        .neq("SenderUserID", userId)
         .is("MessageReadStatus.UserID", null);
 
       if (error) {
-        console.error("Error counting unread messages:", error);
+        console.error(
+          "Client UnreadService: Error counting unread messages:",
+          error,
+        );
         return 0;
       }
 
-      return unreadMessages?.length || 0;
+      const count = unreadMessages?.length || 0;
+      console.log(
+        `Client UnreadService: Found ${count} unread messages for client`,
+      );
+      return count;
     } catch (error) {
-      console.error("Error getting unread count:", error);
+      console.error("Client UnreadService: Error getting unread count:", error);
       return 0;
     }
   }
 
-  // Mark messages as read for the current user in a client's conversation
-  static async markAsRead(
-    userId: string,
-    clientId?: string,
-    userEmail?: string,
-  ): Promise<void> {
+  // Mark messages as read for a client's conversation
+  static async markAsRead(clientId: string, userId: string): Promise<void> {
     try {
-      // Ensure the user exists in the Users table
-      const userExists = await this.ensureUserExists(userId, userEmail);
-      if (!userExists) {
-        console.warn(
-          "Could not ensure user exists in Users table, cannot mark messages as read:",
-          userId,
-        );
+      console.log(
+        `Client UnreadService: Marking messages as read for client ${clientId} by user ${userId}`,
+      );
+
+      // First get the channel for this client
+      const { data: channel, error: channelError } = await supabase
+        .from("ChatChannels")
+        .select("ChannelID")
+        .eq("ClientID", clientId)
+        .single();
+
+      if (channelError || !channel) {
+        console.log("Client UnreadService: No channel found for client");
         return;
       }
 
@@ -131,6 +173,7 @@ export class UnreadService {
           MessageID,
           MessageReadStatus!left(UserID)
         `)
+        .eq("ChannelID", channel.ChannelID)
         .neq("SenderUserID", userId)
         .is("MessageReadStatus.UserID", null);
 
@@ -142,13 +185,21 @@ export class UnreadService {
       const { data: unreadMessages, error: fetchError } = await query;
 
       if (fetchError) {
-        console.error("Error fetching unread messages:", fetchError);
+        console.error(
+          "Client UnreadService: Error fetching unread messages:",
+          fetchError,
+        );
         return;
       }
 
       if (!unreadMessages || unreadMessages.length === 0) {
+        console.log("Client UnreadService: No unread messages to mark as read");
         return; // No unread messages
       }
+
+      console.log(
+        `Client UnreadService: Found ${unreadMessages.length} unread messages to mark as read`,
+      );
 
       // Create read status records for all unread messages
       const readStatusRecords = unreadMessages.map((msg) => ({
@@ -165,20 +216,31 @@ export class UnreadService {
         });
 
       if (insertError) {
-        console.error("Error marking messages as read:", insertError);
-      } else {
-        console.log(
-          `Successfully marked ${readStatusRecords.length} messages as read for user ${userId}`,
+        console.error(
+          "Client UnreadService: Error marking messages as read:",
+          insertError,
+        );
+        throw new Error(
+          `Failed to mark messages as read: ${insertError.message}`,
         );
       }
+
+      console.log(
+        `Client UnreadService: Successfully marked ${readStatusRecords.length} messages as read`,
+      );
+
+      // Emit event to trigger badge updates
+      badgeEventEmitter.emit(clientId);
     } catch (error) {
-      console.error("Error in markAsRead:", error);
+      console.error("Client UnreadService: Error in markAsRead:", error);
+      throw error; // Re-throw to allow calling code to handle
     }
   }
 
   // Subscribe to new messages for unread count updates
   static subscribeToUnreadUpdates(
     clientId: string,
+    userId: string,
     callback: (unreadCount: number) => void,
   ) {
     const channel = supabase.channel(
@@ -194,10 +256,21 @@ export class UnreadService {
         table: "Messages",
       },
       async (payload) => {
-        // Only count if message is not from current client
-        if (payload.new.SenderUserID !== clientId) {
-          const unreadCount = await this.getUnreadCount(clientId);
+        console.log(
+          "Client UnreadService: New message received in subscription:",
+          payload.new,
+        );
+        // Only count if message is not from current user
+        if (payload.new.SenderUserID !== userId) {
+          console.log(
+            "Client UnreadService: Message is from admin, updating unread count",
+          );
+          const unreadCount = await this.getUnreadCount(clientId, userId);
           callback(unreadCount);
+        } else {
+          console.log(
+            "Client UnreadService: Message is from current user, ignoring",
+          );
         }
       },
     );
@@ -211,10 +284,21 @@ export class UnreadService {
         table: "MessageReadStatus",
       },
       async (payload) => {
-        // Only update if this client marked something as read
-        if (payload.new.UserID === clientId) {
-          const unreadCount = await this.getUnreadCount(clientId);
+        console.log(
+          "Client UnreadService: Read status change received:",
+          payload.new,
+        );
+        // Only update if this user marked something as read
+        if (payload.new.UserID === userId) {
+          console.log(
+            "Client UnreadService: Read status change is for current user, updating count",
+          );
+          const unreadCount = await this.getUnreadCount(clientId, userId);
           callback(unreadCount);
+        } else {
+          console.log(
+            "Client UnreadService: Read status change is for different user, ignoring",
+          );
         }
       },
     );
