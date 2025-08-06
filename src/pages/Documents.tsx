@@ -141,31 +141,24 @@ export default function Documents() {
       );
 
       if (result.success) {
-        // Update request status if this was for a specific request
-        if (requestId) {
-          console.log('Updating document request status for:', requestId);
-          const statusUpdateResult = await DocumentService.updateDocumentRequestStatus(requestId, 'uploaded');
-          if (!statusUpdateResult.success) {
-            console.error('Failed to update request status:', statusUpdateResult.error);
-          } else {
-            console.log('Successfully updated request status to uploaded');
+        console.log('Document uploaded successfully:', result.documentId);
 
-            // Send notification to job assignees
-            try {
-              const request = documentRequests.find(r => r.RequestID === requestId);
-              if (request && selectedClient) {
-                await DocumentService.notifyDocumentUpload({
-                  jobId: request.JobID,
-                  clientName: selectedClient.ClientName,
-                  documentName: file.name,
-                  requestName: request.RequestName
-                });
-                console.log('Notification sent to job assignees');
-              }
-            } catch (notificationError) {
-              console.error('Failed to send notification:', notificationError);
-              // Don't fail the upload if notification fails
+        // Send notification to job assignees if this was for a specific request
+        if (requestId) {
+          try {
+            const request = documentRequests.find(r => r.RequestID === requestId);
+            if (request && selectedClient) {
+              await DocumentService.notifyDocumentUpload({
+                jobId: request.JobID,
+                clientName: selectedClient.ClientName,
+                documentName: file.name,
+                requestName: request.RequestName
+              });
+              console.log('Notification sent to job assignees');
             }
+          } catch (notificationError) {
+            console.error('Failed to send notification:', notificationError);
+            // Don't fail the upload if notification fails
           }
         }
 
@@ -284,14 +277,31 @@ export default function Documents() {
                   <ExclamationTriangleIcon className="w-8 h-8 text-red-500 mx-auto mb-2" />
                   <p className="text-red-600">{error}</p>
                 </div>
-              ) : documentRequests.filter(request => request.Status === 'pending').length === 0 ? (
+              ) : documentRequests.filter(request => {
+                const hasDocument = clientDocuments.some(doc =>
+                  doc.JobID === request.JobID &&
+                  doc.FileName.toLowerCase().includes(request.RequestName.toLowerCase().substring(0, 5))
+                );
+                return request.Status === 'pending' && !hasDocument;
+              }).length === 0 ? (
                 <div className="text-center py-8">
                   <DocumentIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-slate-600">No pending document requests</p>
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {documentRequests.filter(request => request.Status === 'pending').map((request) => (
+                  {documentRequests.filter(request => {
+                    // Show request if it's pending OR if no document exists for this request yet
+                    if (request.Status !== 'pending') return false;
+
+                    // Check if there's already a document uploaded for this request
+                    const hasDocument = clientDocuments.some(doc =>
+                      doc.JobID === request.JobID &&
+                      doc.FileName.toLowerCase().includes(request.RequestName.toLowerCase().substring(0, 5))
+                    );
+
+                    return !hasDocument; // Only show if no document exists yet
+                  }).map((request) => (
                     <motion.div
                       key={request.RequestID}
                       className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200 hover:shadow-xl transition-all duration-300"
