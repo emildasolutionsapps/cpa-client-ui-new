@@ -286,6 +286,43 @@ export class DocumentService {
     }
   }
 
+  // Send notification to job assignees when document is uploaded
+  static async notifyDocumentUpload(data: {
+    jobId: string;
+    clientName: string;
+    documentName: string;
+    requestName: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `${supabase.supabaseUrl}/functions/v1/notify-document-upload`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabase.supabaseKey}`,
+          },
+          body: JSON.stringify(data),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return { success: result.success };
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      return {
+        success: false,
+        error: error instanceof Error
+          ? error.message
+          : "Failed to send notification",
+      };
+    }
+  }
+
   // Get client info for S3 path generation
   static async getClientInfo(
     clientId: string,

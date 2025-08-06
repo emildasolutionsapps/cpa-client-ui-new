@@ -5,7 +5,6 @@ import {
   CloudArrowUpIcon,
   CheckCircleIcon,
   ClockIcon,
-  EyeIcon,
   ArrowDownTrayIcon,
   PlusIcon,
   ExclamationTriangleIcon,
@@ -150,6 +149,23 @@ export default function Documents() {
             console.error('Failed to update request status:', statusUpdateResult.error);
           } else {
             console.log('Successfully updated request status to uploaded');
+
+            // Send notification to job assignees
+            try {
+              const request = documentRequests.find(r => r.RequestID === requestId);
+              if (request && selectedClient) {
+                await DocumentService.notifyDocumentUpload({
+                  jobId: request.JobID,
+                  clientName: selectedClient.ClientName,
+                  documentName: file.name,
+                  requestName: request.RequestName
+                });
+                console.log('Notification sent to job assignees');
+              }
+            } catch (notificationError) {
+              console.error('Failed to send notification:', notificationError);
+              // Don't fail the upload if notification fails
+            }
           }
         }
 
@@ -376,7 +392,7 @@ export default function Documents() {
                           <div className="flex items-center space-x-3">
                             <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
                             <div>
-                              <h4 className="font-medium text-slate-900">{request.DocumentName}</h4>
+                              <h4 className="font-medium text-slate-900">{request.RequestName}</h4>
                               <p className="text-sm text-slate-600">{request.Description}</p>
                             </div>
                           </div>
