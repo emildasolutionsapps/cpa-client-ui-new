@@ -142,6 +142,20 @@ export const getClientDocumentKey = (
 };
 
 /**
+ * Get the S3 key for client general uploads:
+ * clients/(clientname+clientcode)/jobid/01_Client_General_Uploads/filename
+ */
+export const getClientGeneralUploadKey = (
+  clientName: string,
+  clientCode: string,
+  jobId: string,
+  fileName: string,
+): string => {
+  const clientFolderName = createClientFolderName(clientName, clientCode);
+  return `clients/${clientFolderName}/${jobId}/01_Client_General_Uploads/${fileName}`;
+};
+
+/**
  * Upload file to S3 with validation
  */
 export const uploadFileToS3 = async (
@@ -245,6 +259,46 @@ export const uploadClientDocument = async (
       key: "",
       url: "",
       error: error.message || "Failed to upload client document",
+    };
+  }
+};
+
+/**
+ * Upload client general document using the general uploads folder structure:
+ * clients/(clientname+clientcode)/jobid/01_Client_General_Uploads/filename
+ */
+export const uploadClientGeneralDocument = async (
+  file: File,
+  clientName: string,
+  clientCode: string,
+  jobId: string,
+  metadata?: Record<string, string>,
+  onProgress?: (progress: S3UploadProgress) => void,
+): Promise<S3UploadResult> => {
+  try {
+    // Use original filename for client uploads (no timestamp/random ID)
+    const key = getClientGeneralUploadKey(
+      clientName,
+      clientCode,
+      jobId,
+      file.name,
+    );
+
+    // Upload the file using the standard upload function
+    return await uploadFileToS3(file, key, {
+      clientName,
+      clientCode,
+      jobId,
+      originalFileName: file.name,
+      uploadType: "client_general_upload",
+      ...metadata,
+    }, onProgress);
+  } catch (error: any) {
+    console.error("Error uploading client general document:", error);
+    return {
+      key: "",
+      url: "",
+      error: error.message || "Failed to upload client general document",
     };
   }
 };

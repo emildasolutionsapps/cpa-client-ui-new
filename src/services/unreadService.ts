@@ -6,6 +6,51 @@ export interface UnreadCount {
 }
 
 export class UnreadService {
+  // Ensure user exists in Users table (for portal users)
+  private static async ensureUserExists(
+    userId: string,
+    userEmail?: string,
+  ): Promise<boolean> {
+    try {
+      // Check if user already exists
+      const { data: existingUser, error: checkError } = await supabase
+        .from("Users")
+        .select("UserID")
+        .eq("UserID", userId)
+        .single();
+
+      if (existingUser) {
+        return true; // User already exists
+      }
+
+      // If user doesn't exist, try to create them
+      if (userEmail) {
+        const { error: insertError } = await supabase
+          .from("Users")
+          .insert({
+            UserID: userId,
+            FullName: userEmail.split("@")[0], // Use email prefix as name
+            Email: userEmail,
+            UserType: "Portal User",
+            IsActive: true,
+          });
+
+        if (insertError) {
+          console.error("Error creating user record:", insertError);
+          return false;
+        }
+
+        console.log("Created user record for portal user:", userId);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Error ensuring user exists:", error);
+      return false;
+    }
+  }
+
   // Get unread message count for a client's conversation
   static async getUnreadCount(clientId: string): Promise<number> {
     try {
@@ -45,30 +90,56 @@ export class UnreadService {
     }
   }
 
-  // Mark messages as read for a client's conversation
-  static async markAsRead(clientId: string): Promise<void> {
+  // Mark messages as read for the current user in a client's conversation
+  static async markAsRead(
+    userId: string,
+    clientId?: string,
+    userEmail?: string,
+  ): Promise<void> {
     try {
-      // First get the channel for this client
-      const { data: channel, error: channelError } = await supabase
-        .from("ChatChannels")
-        .select("ChannelID")
-        .eq("ClientID", clientId)
-        .single();
-
-      if (channelError || !channel) {
+      // Ensure the user exists in the Users table
+      const userExists = await this.ensureUserExists(userId, userEmail);
+      if (!userExists) {
+        console.warn(
+          "Could not ensure user exists in Users table, cannot mark messages as read:",
+          userId,
+        );
         return;
       }
 
-      // Get all unread messages in this channel for this client
-      const { data: unreadMessages, error: fetchError } = await supabase
+      // If clientId is provided, get the specific channel for that client
+      // Otherwise, mark all messages as read for this user
+      let channelFilter = {};
+      if (clientId) {
+        const { data: channel, error: channelError } = await supabase
+          .from("ChatChannels")
+          .select("ChannelID")
+          .eq("ClientID", clientId)
+          .single();
+
+        if (channelError || !channel) {
+          console.warn("No chat channel found for client:", clientId);
+          return;
+        }
+        channelFilter = { ChannelID: channel.ChannelID };
+      }
+
+      // Get all unread messages for this user
+      let query = supabase
         .from("Messages")
         .select(`
           MessageID,
           MessageReadStatus!left(UserID)
         `)
-        .eq("ChannelID", channel.ChannelID)
-        .neq("SenderUserID", clientId)
+        .neq("SenderUserID", userId)
         .is("MessageReadStatus.UserID", null);
+
+      // Apply channel filter if clientId was provided
+      if (clientId && channelFilter.ChannelID) {
+        query = query.eq("ChannelID", channelFilter.ChannelID);
+      }
+
+      const { data: unreadMessages, error: fetchError } = await query;
 
       if (fetchError) {
         console.error("Error fetching unread messages:", fetchError);
@@ -82,15 +153,23 @@ export class UnreadService {
       // Create read status records for all unread messages
       const readStatusRecords = unreadMessages.map((msg) => ({
         MessageID: msg.MessageID,
-        UserID: clientId,
+        UserID: userId,
       }));
 
+      // Use upsert to handle potential duplicates gracefully
       const { error: insertError } = await supabase
         .from("MessageReadStatus")
-        .insert(readStatusRecords);
+        .upsert(readStatusRecords, {
+          onConflict: "MessageID,UserID",
+          ignoreDuplicates: false,
+        });
 
       if (insertError) {
         console.error("Error marking messages as read:", insertError);
+      } else {
+        console.log(
+          `Successfully marked ${readStatusRecords.length} messages as read for user ${userId}`,
+        );
       }
     } catch (error) {
       console.error("Error in markAsRead:", error);

@@ -15,7 +15,9 @@ import {
   CalendarIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
+import { useFilters } from '../contexts/FilterContext';
 import { DocumentService, DocumentRequest, DocumentRecord, Job } from '../services/documentService';
+import { PageFilters } from '../components/PageFilters';
 
 const tabs = [
   { id: 'requested', name: 'Requested Documents', icon: DocumentIcon, color: 'blue' },
@@ -26,6 +28,7 @@ const tabs = [
 
 export default function Documents() {
   const { selectedClientId, selectedClient, user } = useAuth();
+  const { selectedJobId } = useFilters(); // Only need job filter, not year
   const [activeTab, setActiveTab] = useState('requested');
 
   // State for real data
@@ -137,7 +140,8 @@ export default function Documents() {
         selectedClientId,
         user.id,
         clientInfo.ClientName,
-        clientInfo.ClientCode
+        clientInfo.ClientCode,
+        !!requestId // true if this is for a specific request (requested document), false for general upload
       );
 
       if (result.success) {
@@ -207,10 +211,48 @@ export default function Documents() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Filter document requests based on selected filters
+  const getFilteredDocumentRequests = () => {
+    let filtered = documentRequests;
+
+    // Filter by selected job if one is selected
+    if (selectedJobId) {
+      filtered = filtered.filter(request => request.JobID === selectedJobId);
+    }
+
+    return filtered;
+  };
+
 
 
   const getDocumentsByType = (type: string) => {
-    return clientDocuments.filter(doc => doc.DocumentType === type);
+    // Map display types to database types
+    const typeMap: Record<string, string> = {
+      'Client Upload': ['client_upload', 'general_upload'], // Include both requested and general uploads
+      'Workpaper': 'worksheet',
+      'Signed Document': 'e_signature',
+      'Deliverable': 'deliverable'
+    };
+
+    const dbTypes = typeMap[type] || type;
+
+    let filteredDocs = clientDocuments;
+
+    // Filter by document type
+    if (Array.isArray(dbTypes)) {
+      // For Client Upload, show both client_upload and general_upload
+      filteredDocs = filteredDocs.filter(doc => dbTypes.includes(doc.DocumentType));
+    } else {
+      // For other types, use single type matching
+      filteredDocs = filteredDocs.filter(doc => doc.DocumentType === dbTypes);
+    }
+
+    // Filter by selected job if one is selected
+    if (selectedJobId) {
+      filteredDocs = filteredDocs.filter(doc => doc.JobID === selectedJobId);
+    }
+
+    return filteredDocs;
   };
 
   return (
@@ -225,6 +267,9 @@ export default function Documents() {
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Document Center</h1>
           <p className="text-slate-600">Manage your tax documents efficiently and securely</p>
         </div>
+
+        {/* Service Filter */}
+        <PageFilters className="mb-6" showJobFilter={true} showYearFilter={false} />
 
         {/* Modern Tab Navigation */}
         <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-3xl p-1 shadow-lg border border-slate-200 mb-8">
@@ -277,7 +322,7 @@ export default function Documents() {
                   <ExclamationTriangleIcon className="w-8 h-8 text-red-500 mx-auto mb-2" />
                   <p className="text-red-600">{error}</p>
                 </div>
-              ) : documentRequests.filter(request => {
+              ) : getFilteredDocumentRequests().filter(request => {
                 const hasDocument = clientDocuments.some(doc =>
                   doc.JobID === request.JobID &&
                   doc.FileName.toLowerCase().includes(request.RequestName.toLowerCase().substring(0, 5))
@@ -290,7 +335,7 @@ export default function Documents() {
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {documentRequests.filter(request => {
+                  {getFilteredDocumentRequests().filter(request => {
                     // Show request if it's pending OR if no document exists for this request yet
                     if (request.Status !== 'pending') return false;
 

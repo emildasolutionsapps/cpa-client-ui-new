@@ -2,25 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDownIcon, UserIcon, CalendarIcon, BriefcaseIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { DocumentService, Job } from '../services/documentService';
+import { useFilters } from '../contexts/FilterContext';
 
-interface FilterBarProps {
-  selectedJobId: string;
-  setSelectedJobId: (jobId: string) => void;
-  selectedJobName: string;
-  setSelectedJobName: (jobName: string) => void;
-  selectedYear: string;
-  setSelectedYear: (year: string) => void;
-}
+// Simplified interface - no longer need props since we use context
+interface FilterBarProps {}
 
-export default function FilterBar({
-  selectedJobId,
-  setSelectedJobId,
-  selectedJobName,
-  setSelectedJobName,
-  selectedYear,
-  setSelectedYear
-}: FilterBarProps) {
+export default function FilterBar({}: FilterBarProps) {
   const {
     availableClients,
     selectedClient,
@@ -29,50 +16,19 @@ export default function FilterBar({
     loadingClients
   } = useAuth();
 
-  const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
-  const [loadingJobs, setLoadingJobs] = useState(false);
-
-  // Load jobs when client changes
-  useEffect(() => {
-    const loadJobs = async () => {
-      if (!selectedClientId) {
-        setAvailableJobs([]);
-        setSelectedJobId('');
-        setSelectedJobName('');
-        return;
-      }
-
-      setLoadingJobs(true);
-      try {
-        const { data: jobs, error } = await DocumentService.getClientJobs(selectedClientId);
-        if (error) {
-          console.error('Error loading jobs:', error);
-          setAvailableJobs([]);
-        } else {
-          setAvailableJobs(jobs || []);
-          // Auto-select first job if available and none selected
-          if (jobs && jobs.length > 0 && !selectedJobId) {
-            setSelectedJobId(jobs[0].JobID);
-            setSelectedJobName(jobs[0].JobName);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading jobs:', error);
-        setAvailableJobs([]);
-      } finally {
-        setLoadingJobs(false);
-      }
-    };
-
-    loadJobs();
-  }, [selectedClientId, selectedJobId, setSelectedJobId, setSelectedJobName]);
+  const {
+    selectedYear,
+    selectedJobId,
+    selectedJobName,
+    availableYears,
+    getFilteredJobs,
+    loadingJobs,
+    setSelectedYear,
+    setSelectedJobId
+  } = useFilters();
 
   const handleJobChange = (jobId: string) => {
-    const job = availableJobs.find(j => j.JobID === jobId);
-    if (job) {
-      setSelectedJobId(jobId);
-      setSelectedJobName(job.JobName);
-    }
+    setSelectedJobId(jobId);
   };
   return (
     <motion.div
@@ -145,12 +101,18 @@ export default function FilterBar({
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-emerald-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all duration-200"
+              disabled={availableYears.length === 0}
+              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-emerald-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all duration-200 disabled:opacity-50"
             >
-              <option>2025</option>
-              <option>2024</option>
-              <option>2023</option>
-              <option>2022</option>
+              {availableYears.length === 0 ? (
+                <option value="">No years available</option>
+              ) : (
+                availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))
+              )}
             </select>
             <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
           </div>
@@ -175,17 +137,17 @@ export default function FilterBar({
             <select
               value={selectedJobId}
               onChange={(e) => handleJobChange(e.target.value)}
-              disabled={loadingJobs || availableJobs.length === 0}
+              disabled={loadingJobs || getFilteredJobs().length === 0}
               className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-amber-300 focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all duration-200 disabled:opacity-50"
             >
               {loadingJobs ? (
                 <option value="">Loading services...</option>
-              ) : availableJobs.length === 0 ? (
-                <option value="">No services available</option>
+              ) : getFilteredJobs().length === 0 ? (
+                <option value="">No services available for {selectedYear}</option>
               ) : (
                 <>
                   <option value="">Select a service type...</option>
-                  {availableJobs.map((job) => (
+                  {getFilteredJobs().map((job) => (
                     <option key={job.JobID} value={job.JobID}>
                       {job.JobName}
                     </option>

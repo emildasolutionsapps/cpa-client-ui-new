@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  DocumentIcon, 
-  CheckCircleIcon, 
+import {
+  DocumentIcon,
+  CheckCircleIcon,
   PencilSquareIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
+import { useFilters } from '../contexts/FilterContext';
+import { PageFilters } from '../components/PageFilters';
 
 const signatureForms = [
   {
@@ -33,6 +35,7 @@ const signatureForms = [
 ];
 
 export default function Signatures() {
+  const { selectedJobId } = useFilters(); // Only need job filter, not year
   const [showSignModal, setShowSignModal] = useState(false);
   const [selectedForm, setSelectedForm] = useState<any>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -95,6 +98,9 @@ export default function Signatures() {
       >
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Digital Signatures</h1>
         <p className="text-slate-600 mb-8">Review and sign required documents for your tax filing</p>
+
+        {/* Service Filter */}
+        <PageFilters className="mb-6" showJobFilter={true} showYearFilter={false} />
 
         {/* Progress Summary */}
         {/* <div className="bg-gradient-to-r from-blue-50 to-emerald-50 rounded-2xl p-6 mb-8 border border-blue-100">

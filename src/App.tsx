@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { NotificationProvider } from './components/Notifications/NotificationProvider';
+import { FilterProvider } from './contexts/FilterContext';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -94,12 +95,14 @@ function App() {
 // Layout component for authenticated pages
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <Sidebar />
-      <main className="flex-1 ml-64 p-8">
-        {children}
-      </main>
-    </div>
+    <FilterProvider>
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <Sidebar />
+        <main className="flex-1 ml-64 p-8">
+          {children}
+        </main>
+      </div>
+    </FilterProvider>
   );
 }
 

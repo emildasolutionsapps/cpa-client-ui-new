@@ -48,12 +48,13 @@ const Messages: React.FC = () => {
   };
 
   const loadMessages = useCallback(async () => {
-    if (!selectedClientId) return;
+    if (!selectedClientId || !user) return;
     setLoading(true);
     try {
       const data = await ChatService.getMessages(selectedClientId);
       setMessages(data);
-      await UnreadService.markAsRead(selectedClientId);
+      // Mark messages as read using the current user's ID for this client's conversation
+      await UnreadService.markAsRead(user.id, selectedClientId, user.email);
       // Scroll after loading messages
       setTimeout(scrollToBottom, 200);
     } catch (err) {
@@ -61,7 +62,7 @@ const Messages: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedClientId]);
+  }, [selectedClientId, user]);
 
   // Scroll whenever messages change
   useEffect(() => {

@@ -14,11 +14,9 @@ import StatusCard from '../components/StatusCard';
 import UploadZone from '../components/UploadZone';
 import { useClientData } from '../hooks/useClientData';
 import { useAuth } from '../contexts/AuthContext';
+import { useFilters } from '../contexts/FilterContext';
 
 export default function Dashboard() {
-  const [selectedJobId, setSelectedJobId] = useState<string>('');
-  const [selectedJobName, setSelectedJobName] = useState('');
-  const [selectedYear, setSelectedYear] = useState('2025');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Document status - can be 'complete' or 'pending'
@@ -26,6 +24,9 @@ export default function Dashboard() {
 
   // Use auth context for client access info
   const { hasClientAccess, clientsError, loadingClients } = useAuth();
+
+  // Use filters context for year and job filtering
+  const { selectedYear, selectedJobId, selectedJobName } = useFilters();
 
   // Use client data hook
   const {
@@ -100,14 +101,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <FilterBar
-        selectedJobId={selectedJobId}
-        setSelectedJobId={setSelectedJobId}
-        selectedJobName={selectedJobName}
-        setSelectedJobName={setSelectedJobName}
-        selectedYear={selectedYear}
-        setSelectedYear={setSelectedYear}
-      />
+      <FilterBar />
 
       {/* Main Status Banner */}
       {/* <motion.div 

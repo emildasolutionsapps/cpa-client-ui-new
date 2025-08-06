@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { uploadClientDocument } from "./s3Service";
+import { uploadClientDocument, uploadClientGeneralDocument } from "./s3Service";
 
 // Types matching the admin app schema
 export interface DocumentRecord {
@@ -144,6 +144,7 @@ export class DocumentService {
     userId: string,
     clientName: string,
     clientCode: string,
+    isRequestedDocument: boolean = false, // New parameter to distinguish upload types
   ): Promise<{ success: boolean; documentId?: string; error?: string }> {
     try {
       console.log("Starting client document upload:", {
@@ -160,12 +161,24 @@ export class DocumentService {
       let s3UploadSuccessful = false;
 
       try {
-        uploadResult = await uploadClientDocument(
-          file,
-          clientName,
-          clientCode,
-          jobId,
-        );
+        // Use different upload functions based on document type
+        if (isRequestedDocument) {
+          // Requested documents go to 02_Requested_Documents folder
+          uploadResult = await uploadClientDocument(
+            file,
+            clientName,
+            clientCode,
+            jobId,
+          );
+        } else {
+          // General uploads go to 01_Client_General_Uploads folder
+          uploadResult = await uploadClientGeneralDocument(
+            file,
+            clientName,
+            clientCode,
+            jobId,
+          );
+        }
 
         if (uploadResult.error) {
           console.warn(
@@ -191,7 +204,9 @@ export class DocumentService {
           JobID: jobId,
           FileName: file.name,
           FileSize: file.size,
-          DocumentType: "client_upload",
+          DocumentType: isRequestedDocument
+            ? "client_upload"
+            : "general_upload", // Different types for requested vs general
           S3Path: s3UploadSuccessful ? uploadResult.key : null,
           UploadedBy: userId,
           ClientCanSee: true,
