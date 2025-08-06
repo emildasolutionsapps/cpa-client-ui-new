@@ -309,24 +309,18 @@ export class DocumentService {
     requestName: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/notify-document-upload`,
+      const { data: result, error } = await supabase.functions.invoke(
+        "notify-document-upload",
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${supabase.supabaseKey}`,
-          },
-          body: JSON.stringify(data),
+          body: data,
         },
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (error) {
+        throw new Error(error.message || "Failed to send notification");
       }
 
-      const result = await response.json();
-      return { success: result.success };
+      return { success: result?.success || true };
     } catch (error) {
       console.error("Error sending notification:", error);
       return {
