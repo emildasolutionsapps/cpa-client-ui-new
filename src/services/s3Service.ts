@@ -39,8 +39,10 @@ const getS3Client = (): S3Client => {
       },
       requestHandler: new FetchHttpHandler({
         keepAlive: true,
+        requestTimeout: 30000, // 30 seconds timeout
       }),
       forcePathStyle: false,
+      maxAttempts: 3, // Retry failed requests up to 3 times
     });
   }
   return s3Client;
@@ -220,6 +222,19 @@ export const uploadFileToS3 = async (
     };
   } catch (error: any) {
     console.error("Error uploading file to S3:", error);
+
+    // Log more detailed error information
+    if (
+      error.name === "TypeError" && error.message.includes("Failed to fetch")
+    ) {
+      console.error(
+        "CORS or network error detected. Check S3 CORS configuration and network connectivity.",
+      );
+      console.error("S3 Bucket:", S3_BUCKET_NAME);
+      console.error("S3 Region:", S3_REGION);
+      console.error("Upload Key:", key);
+    }
+
     return {
       key: "",
       url: "",

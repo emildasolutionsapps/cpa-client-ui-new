@@ -147,9 +147,18 @@ export default function Documents() {
       if (result.success) {
         console.log('Document uploaded successfully:', result.documentId);
 
-        // Send notification to job assignees if this was for a specific request
+        // Update document request status and send notification if this was for a specific request
         if (requestId) {
           try {
+            // Update the request status to 'uploaded'
+            const updateResult = await DocumentService.updateDocumentRequestStatus(requestId, 'uploaded');
+            if (updateResult.success) {
+              console.log('Document request status updated to uploaded');
+            } else {
+              console.error('Failed to update request status:', updateResult.error);
+            }
+
+            // Send notification to job assignees
             const request = documentRequests.find(r => r.RequestID === requestId);
             if (request && selectedClient) {
               await DocumentService.notifyDocumentUpload({
@@ -161,7 +170,7 @@ export default function Documents() {
               console.log('Notification sent to job assignees');
             }
           } catch (notificationError) {
-            console.error('Failed to send notification:', notificationError);
+            console.error('Failed to update request status or send notification:', notificationError);
             // Don't fail the upload if notification fails
           }
         }
@@ -226,26 +235,11 @@ export default function Documents() {
 
 
   const getDocumentsByType = (type: string) => {
-    // Map display types to database types
-    const typeMap: Record<string, string> = {
-      'Client Upload': ['client_upload', 'general_upload'], // Include both requested and general uploads
-      'Workpaper': 'worksheet',
-      'Signed Document': 'e_signature',
-      'Deliverable': 'deliverable'
-    };
-
-    const dbTypes = typeMap[type] || type;
-
+    // Now using display names directly since database was updated
     let filteredDocs = clientDocuments;
 
-    // Filter by document type
-    if (Array.isArray(dbTypes)) {
-      // For Client Upload, show both client_upload and general_upload
-      filteredDocs = filteredDocs.filter(doc => dbTypes.includes(doc.DocumentType));
-    } else {
-      // For other types, use single type matching
-      filteredDocs = filteredDocs.filter(doc => doc.DocumentType === dbTypes);
-    }
+    // Filter by document type using display names
+    filteredDocs = filteredDocs.filter(doc => doc.DocumentType === type);
 
     // Filter by selected job if one is selected
     if (selectedJobId) {
