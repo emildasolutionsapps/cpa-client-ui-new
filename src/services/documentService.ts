@@ -5,7 +5,7 @@ import { uploadClientDocument, uploadClientGeneralDocument } from "./s3Service";
 export interface DocumentRecord {
   DocumentID: string;
   JobID: string;
-  FileName: string;
+  DocumentName: string; // Updated column name
   FileSize: number;
   DocumentType:
     | "Client Upload"
@@ -13,7 +13,7 @@ export interface DocumentRecord {
     | "Signed Document"
     | "Deliverable";
   Status: string;
-  S3Path: string;
+  S3_Key: string; // Updated column name
   UploadedBy: string;
   ClientCanSee: boolean;
   CreatedAt: string;
@@ -202,12 +202,10 @@ export class DocumentService {
       try {
         const documentRecord = {
           JobID: jobId,
-          FileName: file.name,
+          DocumentName: file.name, // Updated column name
           FileSize: file.size,
-          DocumentType: isRequestedDocument
-            ? "client_upload"
-            : "general_upload", // Different types for requested vs general
-          S3Path: s3UploadSuccessful ? uploadResult.key : null,
+          DocumentType: "Client Upload", // Use display name format
+          S3_Key: s3UploadSuccessful ? uploadResult.key : null, // Updated column name
           UploadedBy: userId,
           ClientCanSee: true,
         };
@@ -243,7 +241,6 @@ export class DocumentService {
         return {
           success: true,
           documentId: data.DocumentID,
-          message: "Document uploaded successfully!",
         };
       } catch (dbError) {
         console.error("Database operation failed:", dbError);
