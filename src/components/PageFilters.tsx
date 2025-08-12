@@ -56,7 +56,6 @@ export const PageFilters: React.FC<PageFiltersProps> = ({
                 disabled={loadingJobs || filteredJobs.length === 0}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50"
               >
-                <option value="">All Services</option>
                 {filteredJobs.map((job) => (
                   <option key={job.JobID} value={job.JobID}>
                     {job.JobName}
@@ -166,7 +165,6 @@ export const PageFilters: React.FC<PageFiltersProps> = ({
                       disabled={loadingJobs || filteredJobs.length === 0}
                       className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50"
                     >
-                      <option value="">All Services</option>
                       {filteredJobs.map((job) => (
                         <option key={job.JobID} value={job.JobID}>
                           {job.JobName}

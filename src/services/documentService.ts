@@ -156,6 +156,23 @@ export class DocumentService {
         userId,
       });
 
+      // Get job details for proper folder naming
+      const { data: jobData, error: jobError } = await supabase
+        .from("Jobs")
+        .select("JobName, JobCode")
+        .eq("JobID", jobId)
+        .single();
+
+      if (jobError || !jobData) {
+        console.warn(
+          "Could not get job details, using fallback naming:",
+          jobError,
+        );
+      }
+
+      const jobTitle = jobData?.JobName || `job-${jobId}`;
+      const jobCode = jobData?.JobCode || "UNKNOWN";
+
       // Try to upload file to S3 using the proper client document structure
       let uploadResult: any = null;
       let s3UploadSuccessful = false;
@@ -168,7 +185,8 @@ export class DocumentService {
             file,
             clientName,
             clientCode,
-            jobId,
+            jobTitle,
+            jobCode,
           );
         } else {
           // General uploads go to 01_Client_General_Uploads folder
@@ -176,7 +194,8 @@ export class DocumentService {
             file,
             clientName,
             clientCode,
-            jobId,
+            jobTitle,
+            jobCode,
           );
         }
 
@@ -189,6 +208,32 @@ export class DocumentService {
         } else {
           console.log("S3 upload successful:", uploadResult.key);
           s3UploadSuccessful = true;
+
+          // Copy file to workpapers folder for accountant use
+          try {
+            const { uploadToWorkpapers } = await import("./s3Service");
+            const workpaperResult = await uploadToWorkpapers(
+              file,
+              clientName,
+              clientCode,
+              jobTitle,
+              jobCode,
+            );
+
+            if (workpaperResult.error) {
+              console.warn(
+                "Failed to copy to workpapers folder:",
+                workpaperResult.error,
+              );
+            } else {
+              console.log(
+                "File copied to workpapers folder:",
+                workpaperResult.key,
+              );
+            }
+          } catch (workpaperError) {
+            console.warn("Error copying to workpapers folder:", workpaperError);
+          }
         }
       } catch (s3Error) {
         console.warn(

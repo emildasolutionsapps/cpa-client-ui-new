@@ -114,6 +114,35 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
     setSelectedJobName('');
   }, [selectedClientId]);
 
+  // Auto-select first job when jobs are loaded
+  useEffect(() => {
+    if (availableJobs.length > 0 && !selectedJobId) {
+      // Inline filtering logic to avoid dependency issues
+      let filteredJobs = availableJobs;
+      if (selectedYear) {
+        filteredJobs = availableJobs.filter(job => {
+          // First try to match year from job name (more reliable)
+          const yearMatch = job.JobName.match(/20\d{2}/);
+          if (yearMatch && yearMatch[0] === selectedYear) {
+            return true;
+          }
+          // If no year in job name, fallback to creation date
+          if (!yearMatch) {
+            const createdYear = new Date(job.CreatedAt).getFullYear().toString();
+            return createdYear === selectedYear;
+          }
+          return false;
+        });
+      }
+
+      if (filteredJobs.length > 0) {
+        const firstJob = filteredJobs[0];
+        setSelectedJobId(firstJob.JobID);
+        setSelectedJobName(firstJob.JobName);
+      }
+    }
+  }, [availableJobs, selectedYear, selectedJobId]);
+
   // Get filtered jobs based on selected year
   const getFilteredJobs = (): Job[] => {
     if (!selectedYear) return availableJobs;

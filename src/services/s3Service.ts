@@ -129,32 +129,135 @@ export const createClientFolderName = (
   return `${slugifiedName}-${clientCode}`;
 };
 
+export const createJobFolderName = (
+  jobTitle: string,
+  jobCode: string,
+): string => {
+  const slugifiedTitle = slugify(jobTitle);
+  // New format: jobTitle-[jobCode] (human readable + short code in brackets)
+  return `${slugifiedTitle}-[${jobCode}]`;
+};
+
 /**
- * Get the S3 key for client document uploads following the specification:
- * clients/(clientname+clientcode)/jobid/02_Requested_Documents/filename
+ * Find existing job folder by searching for job code pattern
+ */
+export const findExistingJobFolder = async (
+  clientFolderName: string,
+  jobCode: string,
+): Promise<{ folderName: string | null; error?: string }> => {
+  try {
+    const client = getS3Client();
+    const prefix = `clients/${clientFolderName}/`;
+
+    const command = new ListObjectsV2Command({
+      Bucket: S3_BUCKET_NAME,
+      Prefix: prefix,
+      Delimiter: "/",
+      MaxKeys: 100,
+    });
+
+    const response = await client.send(command);
+
+    if (response.CommonPrefixes) {
+      // Look for folder that ends with [jobCode]
+      const jobCodePattern = `[${jobCode}]`;
+      const matchingFolder = response.CommonPrefixes.find((prefix) =>
+        prefix.Prefix?.includes(jobCodePattern)
+      );
+
+      if (matchingFolder) {
+        // Extract just the folder name (remove prefix and trailing slash)
+        const folderName = matchingFolder.Prefix!
+          .replace(`clients/${clientFolderName}/`, "")
+          .replace("/", "");
+        return { folderName };
+      }
+    }
+
+    return { folderName: null };
+  } catch (error: any) {
+    console.error("Error finding existing job folder:", error);
+    return { folderName: null, error: error.message };
+  }
+};
+
+/**
+ * Get the S3 key for client document uploads using new job folder structure:
+ * clients/(clientname+clientcode)/jobname-[jobcode]/02_Requested_Documents/filename
  */
 export const getClientDocumentKey = (
   clientName: string,
   clientCode: string,
-  jobId: string,
+  jobTitle: string,
+  jobCode: string,
   fileName: string,
 ): string => {
   const clientFolderName = createClientFolderName(clientName, clientCode);
-  return `clients/${clientFolderName}/${jobId}/02_Requested_Documents/${fileName}`;
+  const jobFolderName = createJobFolderName(jobTitle, jobCode);
+  return `clients/${clientFolderName}/${jobFolderName}/02_Requested_Documents/${fileName}`;
 };
 
 /**
- * Get the S3 key for client general uploads:
- * clients/(clientname+clientcode)/jobid/01_Client_General_Uploads/filename
+ * Legacy function for backward compatibility - tries to find job folder by job ID
  */
-export const getClientGeneralUploadKey = (
+export const getClientDocumentKeyLegacy = async (
   clientName: string,
   clientCode: string,
   jobId: string,
   fileName: string,
+): Promise<{ key: string | null; error?: string }> => {
+  try {
+    // Try to find the job folder by looking up job info
+    const { supabase } = await import("../lib/supabase");
+    const { data: job, error } = await supabase
+      .from("Jobs")
+      .select("JobName, JobCode")
+      .eq("JobID", jobId)
+      .single();
+
+    if (error || !job) {
+      // Fallback to old structure for legacy jobs
+      const clientFolderName = createClientFolderName(clientName, clientCode);
+      return {
+        key:
+          `clients/${clientFolderName}/${jobId}/02_Requested_Documents/${fileName}`,
+        error: "Using legacy folder structure - job not found in database",
+      };
+    }
+
+    // Use new structure with job code
+    const jobCode = job.JobCode || "LEGACY";
+    const key = getClientDocumentKey(
+      clientName,
+      clientCode,
+      job.JobName,
+      jobCode,
+      fileName,
+    );
+    return { key };
+  } catch (error: any) {
+    console.error("Error getting client document key:", error);
+    return {
+      key: null,
+      error: error.message || "Failed to get document key",
+    };
+  }
+};
+
+/**
+ * Get the S3 key for client general uploads:
+ * clients/(clientname+clientcode)/jobfolder/01_Client_General_Uploads/filename
+ */
+export const getClientGeneralUploadKey = (
+  clientName: string,
+  clientCode: string,
+  jobTitle: string,
+  jobCode: string,
+  fileName: string,
 ): string => {
   const clientFolderName = createClientFolderName(clientName, clientCode);
-  return `clients/${clientFolderName}/${jobId}/01_Client_General_Uploads/${fileName}`;
+  const jobFolderName = createJobFolderName(jobTitle, jobCode);
+  return `clients/${clientFolderName}/${jobFolderName}/01_Client_General_Uploads/${fileName}`;
 };
 
 /**
@@ -201,7 +304,28 @@ export const uploadFileToS3 = async (
       },
     });
 
-    await client.send(command);
+    // Add retry logic for browser uploads
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await client.send(command);
+        console.log(`S3 upload successful on attempt ${attempt}`);
+        break; // Success, exit retry loop
+      } catch (error) {
+        lastError = error;
+        console.warn(`S3 upload attempt ${attempt} failed:`, error);
+
+        if (attempt < 3) {
+          // Wait before retrying (exponential backoff)
+          const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          // All attempts failed, throw the last error
+          throw lastError;
+        }
+      }
+    }
 
     // Report completion
     if (onProgress) {
@@ -244,26 +368,34 @@ export const uploadFileToS3 = async (
 };
 
 /**
- * Upload client document using the specification folder structure:
- * clients/(clientname+clientcode)/jobid/02_Requested_Documents/filename
+ * Upload client document using the new job folder structure:
+ * clients/(clientname+clientcode)/jobname-[jobcode]/02_Requested_Documents/filename
  */
 export const uploadClientDocument = async (
   file: File,
   clientName: string,
   clientCode: string,
-  jobId: string,
+  jobTitle: string,
+  jobCode: string,
   metadata?: Record<string, string>,
   onProgress?: (progress: S3UploadProgress) => void,
 ): Promise<S3UploadResult> => {
   try {
-    // Use original filename for client uploads (no timestamp/random ID)
-    const key = getClientDocumentKey(clientName, clientCode, jobId, file.name);
+    // Use proper job folder naming
+    const key = getClientDocumentKey(
+      clientName,
+      clientCode,
+      jobTitle,
+      jobCode,
+      file.name,
+    );
 
     // Upload the file using the standard upload function
     return await uploadFileToS3(file, key, {
       clientName,
       clientCode,
-      jobId,
+      jobTitle,
+      jobCode,
       originalFileName: file.name,
       uploadType: "client_document",
       ...metadata,
@@ -280,13 +412,14 @@ export const uploadClientDocument = async (
 
 /**
  * Upload client general document using the general uploads folder structure:
- * clients/(clientname+clientcode)/jobid/01_Client_General_Uploads/filename
+ * clients/(clientname+clientcode)/jobfolder/01_Client_General_Uploads/filename
  */
 export const uploadClientGeneralDocument = async (
   file: File,
   clientName: string,
   clientCode: string,
-  jobId: string,
+  jobTitle: string,
+  jobCode: string,
   metadata?: Record<string, string>,
   onProgress?: (progress: S3UploadProgress) => void,
 ): Promise<S3UploadResult> => {
@@ -295,7 +428,8 @@ export const uploadClientGeneralDocument = async (
     const key = getClientGeneralUploadKey(
       clientName,
       clientCode,
-      jobId,
+      jobTitle,
+      jobCode,
       file.name,
     );
 
@@ -303,7 +437,8 @@ export const uploadClientGeneralDocument = async (
     return await uploadFileToS3(file, key, {
       clientName,
       clientCode,
-      jobId,
+      jobTitle,
+      jobCode,
       originalFileName: file.name,
       uploadType: "client_general_upload",
       ...metadata,
@@ -339,6 +474,143 @@ export const getPresignedUrl = async (
     return {
       url: "",
       error: error.message || "Failed to generate presigned URL",
+    };
+  }
+};
+
+/**
+ * List files in a specific job folder directory for client app
+ */
+export const listJobFolderFiles = async (
+  jobId: string,
+  folderType: string, // '01_Client_General_Uploads', '02_Requested_Documents', etc.
+): Promise<{
+  files: Array<{
+    key: string;
+    name: string;
+    size: number;
+    lastModified: Date;
+    contentType?: string;
+  }>;
+  error?: string;
+}> => {
+  try {
+    // Get job and client information
+    const { supabase } = await import("../lib/supabase");
+    const { data: job, error: jobError } = await supabase
+      .from("Jobs")
+      .select(`
+        JobName,
+        JobCode,
+        Clients!inner(ClientName, ClientCode)
+      `)
+      .eq("JobID", jobId)
+      .single();
+
+    if (jobError || !job || !job.Clients) {
+      return {
+        files: [],
+        error: `Failed to get job information: ${jobError?.message}`,
+      };
+    }
+
+    const clientName = job.Clients.ClientName;
+    const clientCode = job.Clients.ClientCode;
+    const jobCode = job.JobCode;
+    const jobName = job.JobName;
+
+    if (!jobCode) {
+      return {
+        files: [],
+        error: "Job code is missing - cannot locate job folder",
+      };
+    }
+
+    // Build the S3 prefix - first try to find existing folder
+    const clientFolderName = createClientFolderName(clientName, clientCode);
+
+    // Try to find existing job folder first
+    const existingFolder = await findExistingJobFolder(
+      clientFolderName,
+      jobCode,
+    );
+    const jobFolderName = existingFolder.folderName ||
+      createJobFolderName(jobName, jobCode);
+
+    const prefix =
+      `clients/${clientFolderName}/${jobFolderName}/${folderType}/`;
+
+    console.log("Listing files with prefix:", prefix);
+
+    // List objects in S3
+    const client = getS3Client();
+    const command = new ListObjectsV2Command({
+      Bucket: S3_BUCKET_NAME,
+      Prefix: prefix,
+      MaxKeys: 100, // Reasonable limit
+    });
+
+    const response = await client.send(command);
+
+    if (!response.Contents) {
+      return { files: [] };
+    }
+
+    // Filter out folder placeholders and format results
+    const files = response.Contents
+      .filter((obj) => obj.Key && !obj.Key.endsWith("/.folder-placeholder"))
+      .map((obj) => ({
+        key: obj.Key!,
+        name: obj.Key!.split("/").pop() || obj.Key!,
+        size: obj.Size || 0,
+        lastModified: obj.LastModified || new Date(),
+        contentType: obj.ContentType,
+      }))
+      .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime()); // Sort by newest first
+
+    console.log(`Found ${files.length} files in ${folderType}`);
+    return { files };
+  } catch (error: any) {
+    console.error("Error listing job folder files:", error);
+    return {
+      files: [],
+      error: error.message || "Failed to list files",
+    };
+  }
+};
+
+/**
+ * Upload file to workpapers folder for accountant use
+ */
+export const uploadToWorkpapers = async (
+  file: File,
+  clientName: string,
+  clientCode: string,
+  jobTitle: string,
+  jobCode: string,
+  metadata?: Record<string, string>,
+): Promise<S3UploadResult> => {
+  try {
+    const clientFolderName = createClientFolderName(clientName, clientCode);
+    const jobFolderName = createJobFolderName(jobTitle, jobCode);
+    const key =
+      `clients/${clientFolderName}/${jobFolderName}/05_Internal_Workpapers/${file.name}`;
+
+    return await uploadFileToS3(file, key, {
+      clientName,
+      clientCode,
+      jobTitle,
+      jobCode,
+      originalFileName: file.name,
+      uploadType: "workpaper_copy",
+      ...metadata,
+    });
+  } catch (error: any) {
+    console.error("Error uploading to workpapers:", error);
+    return {
+      key: "",
+      url: "",
+      error: error.message || "Failed to upload to workpapers",
     };
   }
 };
