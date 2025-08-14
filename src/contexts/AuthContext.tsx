@@ -131,14 +131,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('🔄 Initial session check:', {
+        hasSession: !!session,
+        userEmail: session?.user?.email,
+        error: error?.message,
+        sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000) : null,
+        isExpired: session?.expires_at ? Date.now() > session.expires_at * 1000 : null
+      })
+
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
 
       // If user is logged in, fetch their permitted clients
       if (session?.user) {
+        console.log('✅ Found existing session, fetching clients...')
         fetchUserClients(session.user.id)
+      } else {
+        console.log('❌ No existing session found')
       }
     })
 
@@ -146,15 +157,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change:', event, session?.user?.email)
+      console.log('🔐 Auth state change:', event, {
+        userEmail: session?.user?.email,
+        hasSession: !!session,
+        sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000) : null,
+        currentTime: new Date()
+      })
+
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
 
       // If user logged in, fetch their clients
       if (session?.user) {
+        console.log('✅ User authenticated, fetching clients...')
         fetchUserClients(session.user.id)
       } else {
+        console.log('❌ No session, clearing client data...')
         // Clear client data on logout
         setAvailableClients([])
         setSelectedClientId(null)
@@ -168,10 +187,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    console.log('🔑 Attempting sign in for:', email)
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
+
+    if (error) {
+      console.error('❌ Sign in error:', error)
+    } else {
+      console.log('✅ Sign in successful:', {
+        userEmail: data.user?.email,
+        sessionExpiry: data.session?.expires_at ? new Date(data.session.expires_at * 1000) : null
+      })
+    }
+
     return { error }
   }
 

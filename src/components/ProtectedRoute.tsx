@@ -10,8 +10,16 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
+  console.log('🛡️ ProtectedRoute check:', {
+    loading,
+    hasUser: !!user,
+    userEmail: user?.email,
+    currentPath: location.pathname
+  })
+
   // Show loading spinner while checking authentication
   if (loading) {
+    console.log('⏳ Still loading auth state...')
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center">
         <div className="text-center">
@@ -24,10 +32,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // If not authenticated, redirect to login
   if (!user) {
+    console.log('❌ No user found, redirecting to login from:', location.pathname)
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
   // User is authenticated, render the protected content
-
+  console.log('✅ User authenticated, rendering protected content')
   return <>{children}</>
 }

@@ -25,6 +25,15 @@ let s3Client: S3Client | null = null;
 
 const getS3Client = (): S3Client => {
   if (!s3Client) {
+    console.log("🔧 S3 Client Configuration:", {
+      hasAccessKey: !!S3_ACCESS_KEY_ID,
+      accessKeyLength: S3_ACCESS_KEY_ID?.length,
+      hasSecretKey: !!S3_SECRET_ACCESS_KEY,
+      secretKeyLength: S3_SECRET_ACCESS_KEY?.length,
+      bucket: S3_BUCKET_NAME,
+      region: S3_REGION,
+    });
+
     if (!S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
       throw new Error(
         "File storage credentials not configured. Please contact your system administrator.",
@@ -39,13 +48,115 @@ const getS3Client = (): S3Client => {
       },
       requestHandler: new FetchHttpHandler({
         keepAlive: true,
-        requestTimeout: 30000, // 30 seconds timeout
+        requestTimeout: 300000, // 5 minutes timeout for large files
+        connectionTimeout: 60000, // 1 minute connection timeout
       }),
       forcePathStyle: false,
       maxAttempts: 3, // Retry failed requests up to 3 times
     });
   }
   return s3Client;
+};
+
+/**
+ * Test S3 connection and credentials
+ */
+export const testS3Connection = async (): Promise<
+  { success: boolean; error?: string }
+> => {
+  try {
+    console.log("🧪 Testing S3 connection...");
+    const client = getS3Client();
+
+    // Try to list objects in the bucket (minimal operation)
+    const command = new ListObjectsV2Command({
+      Bucket: S3_BUCKET_NAME,
+      MaxKeys: 1, // Just get 1 object to test connection
+    });
+
+    const response = await client.send(command);
+    console.log("✅ S3 connection test successful:", {
+      bucket: S3_BUCKET_NAME,
+      objectCount: response.KeyCount || 0,
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("❌ S3 connection test failed:", error);
+    return {
+      success: false,
+      error: error.message || "Unknown S3 connection error",
+    };
+  }
+};
+
+/**
+ * Upload file using presigned URL (CORS-free approach)
+ */
+export const uploadFileWithPresignedUrl = async (
+  file: File,
+  key: string,
+  metadata?: Record<string, string>,
+  onProgress?: (progress: S3UploadProgress) => void,
+): Promise<S3UploadResult> => {
+  try {
+    console.log("🔄 Uploading file using presigned URL approach...");
+
+    // Step 1: Get presigned URL from backend
+    const presignedResponse = await fetch("/api/s3/presigned-upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key,
+        contentType: file.type,
+        metadata,
+      }),
+    });
+
+    if (!presignedResponse.ok) {
+      throw new Error("Failed to get presigned URL");
+    }
+
+    const { uploadUrl, fields } = await presignedResponse.json();
+
+    // Step 2: Upload directly to S3 using presigned URL
+    const formData = new FormData();
+
+    // Add all the fields from presigned URL
+    Object.entries(fields).forEach(([key, value]) => {
+      formData.append(key, value as string);
+    });
+
+    // Add the file last
+    formData.append("file", file);
+
+    // Upload with progress tracking
+    const uploadResponse = await fetch(uploadUrl, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+    }
+
+    console.log("✅ Presigned URL upload successful");
+
+    return {
+      key,
+      url: `https://${S3_BUCKET_NAME}.s3.${S3_REGION}.amazonaws.com/${key}`,
+      error: null,
+    };
+  } catch (error: any) {
+    console.error("❌ Presigned URL upload failed:", error);
+    return {
+      key: "",
+      url: "",
+      error: error.message || "Failed to upload with presigned URL",
+    };
+  }
 };
 
 // S3 Operations Interface
@@ -282,9 +393,16 @@ export const uploadFileToS3 = async (
 
     const client = getS3Client();
 
+    // For browser compatibility, always use ArrayBuffer approach
+    // File streaming doesn't work reliably with AWS SDK in browsers
+    console.log("📦 Converting file to buffer for upload:", file.size, "bytes");
+    if (file.size > 1024 * 1024) {
+      console.log("⚠️ Large file detected - this may take a moment to process");
+    }
+
     // Convert File to ArrayBuffer and then to Uint8Array for browser compatibility
     const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
+    const body = new Uint8Array(arrayBuffer);
 
     // Report progress
     if (onProgress) {
@@ -294,12 +412,14 @@ export const uploadFileToS3 = async (
     const command = new PutObjectCommand({
       Bucket: S3_BUCKET_NAME,
       Key: key,
-      Body: uint8Array,
+      Body: body,
       ContentType: file.type,
       ContentLength: file.size,
       Metadata: {
         originalName: file.name,
         uploadedAt: new Date().toISOString(),
+        fileSize: file.size.toString(),
+        uploadMethod: "buffer", // Always use buffer in browser environment
         ...metadata,
       },
     });
@@ -316,9 +436,10 @@ export const uploadFileToS3 = async (
         console.warn(`S3 upload attempt ${attempt} failed:`, error);
 
         if (attempt < 3) {
-          // Wait before retrying (exponential backoff)
-          const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
-          console.log(`Retrying in ${delay}ms...`);
+          // Wait before retrying (longer delays for large files)
+          const baseDelay = file.size > 1024 * 1024 ? 5000 : 2000; // 5s for large files, 2s for small
+          const delay = Math.pow(2, attempt - 1) * baseDelay; // 5s, 10s for large files
+          console.log(`Retrying in ${delay}ms... (attempt ${attempt + 1}/3)`);
           await new Promise((resolve) => setTimeout(resolve, delay));
         } else {
           // All attempts failed, throw the last error
@@ -352,11 +473,16 @@ export const uploadFileToS3 = async (
       error.name === "TypeError" && error.message.includes("Failed to fetch")
     ) {
       console.error(
-        "CORS or network error detected. Check S3 CORS configuration and network connectivity.",
+        "🚫 CORS ERROR: Client app cannot upload to S3 directly from localhost",
       );
-      console.error("S3 Bucket:", S3_BUCKET_NAME);
-      console.error("S3 Region:", S3_REGION);
-      console.error("Upload Key:", key);
+      console.error("💡 SOLUTION: Add localhost to S3 CORS policy:");
+      console.error(
+        "   AllowedOrigins: ['http://localhost:5173', 'http://localhost:3000']",
+      );
+      console.error("📍 Current Origin:", window.location.origin);
+      console.error("📦 S3 Bucket:", S3_BUCKET_NAME);
+      console.error("🌍 S3 Region:", S3_REGION);
+      console.error("🔑 Upload Key:", key);
     }
 
     return {

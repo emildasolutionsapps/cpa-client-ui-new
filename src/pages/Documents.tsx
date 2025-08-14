@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useFilters } from '../contexts/FilterContext';
 import { DocumentService, DocumentRequest, DocumentRecord, Job } from '../services/documentService';
-import { getPresignedUrl, listJobFolderFiles } from '../services/s3Service';
+import { getPresignedUrl, listJobFolderFiles, testS3Connection } from '../services/s3Service';
 import { PageFilters } from '../components/PageFilters';
 
 const tabs = [
@@ -40,6 +40,7 @@ export default function Documents() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [uploadingRequestId, setUploadingRequestId] = useState<string>('');
+  const [s3TestResult, setS3TestResult] = useState<string | null>(null);
 
   // Load data when client changes
   useEffect(() => {
@@ -244,23 +245,41 @@ export default function Documents() {
     )
   }
 
+  // Test S3 connection
+  const handleS3Test = async () => {
+    setS3TestResult('Testing...');
+    const result = await testS3Connection();
+    if (result.success) {
+      setS3TestResult('✅ S3 Connection Successful');
+    } else {
+      setS3TestResult(`❌ S3 Connection Failed: ${result.error}`);
+    }
+
+    // Clear result after 5 seconds
+    setTimeout(() => setS3TestResult(null), 5000);
+  };
+
   const handleDocumentUpload = async (file: File, requestId?: string) => {
     if (!selectedClientId || !selectedClient || !user) {
       setError('Missing required information for upload');
       return;
     }
 
-    // Find the job for this request or use the first available job
+    // Find the job for this request or use the selected job
     let jobId = '';
     if (requestId) {
       const request = documentRequests.find(r => r.RequestID === requestId);
       jobId = request?.JobID || '';
+    } else if (selectedJobId) {
+      // Use the selected job from filter context
+      jobId = selectedJobId;
     } else if (availableJobs.length > 0) {
+      // Fallback to first available job if no job is selected
       jobId = availableJobs[0].JobID;
     }
 
     if (!jobId) {
-      setError('No job available for upload');
+      setError('No job available for upload. Please select a service from the dropdown.');
       return;
     }
 
@@ -269,6 +288,13 @@ export default function Documents() {
     }
 
     try {
+      // Show warning for large files
+      if (file.size > 1024 * 1024) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        console.log(`⚠️ Uploading large file: ${file.name} (${sizeMB} MB) - this may take longer`);
+        // Note: Client app doesn't have notification system, so just console log
+      }
+
       // Get client info for S3 path
       const { data: clientInfo, error: clientError } = await DocumentService.getClientInfo(selectedClientId);
       if (clientError || !clientInfo) {
@@ -331,6 +357,25 @@ export default function Documents() {
         if (!documentsResult.error) {
           console.log('Updated client documents:', documentsResult.data);
           setClientDocuments(documentsResult.data || []);
+        }
+
+        // Also reload S3 files for the current tab to show the uploaded file immediately
+        const currentTab = tabs.find(tab => tab.id === activeTab);
+        if (currentTab?.folderType && selectedJobId) {
+          console.log('Reloading S3 files for current tab:', currentTab.folderType);
+          try {
+            const result = await listJobFolderFiles(selectedJobId, currentTab.folderType);
+            if (result.error) {
+              console.warn(`Error reloading ${currentTab.folderType}:`, result.error);
+              setS3Files(prev => ({ ...prev, [currentTab.folderType]: [] }));
+            } else {
+              setS3Files(prev => ({ ...prev, [currentTab.folderType]: result.files }));
+              console.log('S3 files reloaded successfully');
+            }
+          } catch (error) {
+            console.error(`Error reloading ${currentTab.folderType}:`, error);
+            setS3Files(prev => ({ ...prev, [currentTab.folderType]: [] }));
+          }
         }
 
       } else {
@@ -402,6 +447,21 @@ export default function Documents() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Document Center</h1>
           <p className="text-slate-600">Manage your tax documents efficiently and securely</p>
+
+          {/* S3 Test Button (Development Only) */}
+          <div className="mt-4">
+            <button
+              onClick={handleS3Test}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              Test S3 Connection
+            </button>
+            {s3TestResult && (
+              <div className="mt-2 text-sm font-medium">
+                {s3TestResult}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Service Filter */}
@@ -599,7 +659,7 @@ export default function Documents() {
                               <span>Uploaded</span>
                             </span>
                             <button
-                              onClick={() => handleDownload(file.key, file.name)}
+                              onClick={() => handleS3Download(file.key, file.name)}
                               className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
                               title="Download file"
                             >

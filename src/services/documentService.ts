@@ -204,6 +204,24 @@ export class DocumentService {
             "S3 upload failed, will save to database only:",
             uploadResult.error,
           );
+
+          // Check if it's a CORS error and suggest solution
+          if (
+            uploadResult.error.includes("CORS") ||
+            uploadResult.error.includes("Failed to fetch")
+          ) {
+            console.warn("💡 This is likely a CORS issue. To fix:");
+            console.warn(
+              "1. Go to AWS S3 Console → Your Bucket → Permissions → CORS",
+            );
+            console.warn("2. Add your localhost URL to AllowedOrigins");
+            console.warn("3. Clear browser cache and try again");
+            console.warn("4. Or try incognito/private browsing mode");
+            console.warn(
+              "5. For now, file will be saved to database and appear in UI",
+            );
+          }
+
           s3UploadSuccessful = false;
         } else {
           console.log("S3 upload successful:", uploadResult.key);
