@@ -245,19 +245,19 @@ export default function Documents() {
     )
   }
 
-  // Test S3 connection
-  const handleS3Test = async () => {
-    setS3TestResult('Testing...');
-    const result = await testS3Connection();
-    if (result.success) {
-      setS3TestResult('✅ S3 Connection Successful');
-    } else {
-      setS3TestResult(`❌ S3 Connection Failed: ${result.error}`);
-    }
-
-    // Clear result after 5 seconds
-    setTimeout(() => setS3TestResult(null), 5000);
-  };
+  // Show message if no service is selected
+  if (!selectedJobId) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <PageFilters />
+        <div className="text-center py-12">
+          <FolderOpenIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Service Selected</h2>
+          <p className="text-slate-600">Please select a service type from the filters above to view documents.</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleDocumentUpload = async (file: File, requestId?: string) => {
     if (!selectedClientId || !selectedClient || !user) {
