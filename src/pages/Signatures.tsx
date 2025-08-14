@@ -6,7 +6,8 @@ import {
   PencilSquareIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  XCircleIcon
+  XCircleIcon,
+  FolderOpenIcon
 } from '@heroicons/react/24/outline';
 import { useFilters } from '../contexts/FilterContext';
 import { PageFilters } from '../components/PageFilters';
@@ -99,6 +100,31 @@ export default function Signatures() {
       </span>
     );
   };
+
+  // Show message if no service is selected
+  if (!selectedJobId) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Digital Signatures</h1>
+          <p className="text-slate-600 mb-8">Review and sign required documents for your tax filing</p>
+
+          {/* Service Filter */}
+          <PageFilters className="mb-6" showJobFilter={true} showYearFilter={false} />
+
+          <div className="text-center py-12">
+            <FolderOpenIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">No Service Selected</h2>
+            <p className="text-slate-600">Please select a service type from the filters above to view signature requests.</p>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl mx-auto">

@@ -244,6 +244,20 @@ export default function Documents() {
     )
   }
 
+  // Show message if no service is selected
+  if (!selectedJobId) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <PageFilters />
+        <div className="text-center py-12">
+          <FolderOpenIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Service Selected</h2>
+          <p className="text-slate-600">Please select a service type from the filters above to view documents.</p>
+        </div>
+      </div>
+    )
+  }
+
   const handleDocumentUpload = async (file: File, requestId?: string) => {
     if (!selectedClientId || !selectedClient || !user) {
       setError('Missing required information for upload');
