@@ -10,8 +10,8 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 
 // Environment variables for S3 configuration
 const S3_ACCESS_KEY_ID = import.meta.env.VITE_S3_ACCESS_KEY_ID;
@@ -46,11 +46,7 @@ const getS3Client = (): S3Client => {
         accessKeyId: S3_ACCESS_KEY_ID,
         secretAccessKey: S3_SECRET_ACCESS_KEY,
       },
-      requestHandler: new FetchHttpHandler({
-        keepAlive: true,
-        requestTimeout: 300000, // 5 minutes timeout for large files
-        connectionTimeout: 60000, // 1 minute connection timeout
-      }),
+      // Remove custom requestHandler - use AWS SDK defaults for better browser compatibility
       forcePathStyle: false,
       maxAttempts: 3, // Retry failed requests up to 3 times
     });
@@ -178,6 +174,76 @@ export interface S3UploadProgress {
   total: number;
   percentage: number;
 }
+
+/**
+ * Upload large file using multipart upload for better reliability
+ */
+const uploadLargeFileMultipart = async (
+  file: File,
+  key: string,
+  metadata?: Record<string, string>,
+  client?: S3Client,
+): Promise<S3UploadResult> => {
+  try {
+    const s3Client = client || getS3Client();
+
+    console.log("🔄 Starting multipart upload...");
+
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: S3_BUCKET_NAME,
+        Key: key,
+        Body: file, // Use File directly - AWS SDK handles browser compatibility
+        ContentType: file.type,
+        Metadata: {
+          originalName: file.name,
+          uploadedAt: new Date().toISOString(),
+          fileSize: file.size.toString(),
+          uploadMethod: "multipart",
+          ...metadata,
+        },
+      },
+      // Use minimal multipart settings for better compatibility
+      partSize: 5 * 1024 * 1024, // 5MB parts (minimum allowed)
+      queueSize: 1, // Sequential upload to avoid connection issues
+    });
+
+    // Add progress tracking
+    upload.on("httpUploadProgress", (progress) => {
+      if (progress.loaded && progress.total) {
+        const percentage = Math.round((progress.loaded / progress.total) * 100);
+        console.log(
+          `📊 Upload progress: ${percentage}% (${progress.loaded}/${progress.total} bytes)`,
+        );
+      }
+    });
+
+    const result = await upload.done();
+    console.log("✅ Multipart upload completed successfully");
+
+    // Generate a presigned URL for accessing the file
+    const getCommand = new GetObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: key,
+    });
+
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 }); // 1 hour
+
+    return {
+      key,
+      url,
+      error: null,
+    };
+  } catch (error: any) {
+    console.error("❌ Multipart upload failed:", error);
+    return {
+      key: "",
+      url: "",
+      error: error.message || "Multipart upload failed",
+    };
+  }
+};
 
 /**
  * Validate file before upload
@@ -393,9 +459,18 @@ export const uploadFileToS3 = async (
 
     const client = getS3Client();
 
-    // For browser compatibility, always use ArrayBuffer approach
-    // File streaming doesn't work reliably with AWS SDK in browsers
-    console.log("📦 Converting file to buffer for upload:", file.size, "bytes");
+    // For files >5MB, use multipart upload (required for large files)
+    if (file.size > 5 * 1024 * 1024) { // 5MB threshold for multipart
+      console.log(
+        "🚀 Using multipart upload for file >5MB:",
+        file.size,
+        "bytes",
+      );
+      return await uploadLargeFileMultipart(file, key, metadata, client);
+    }
+
+    // For smaller files, use regular upload with buffer
+    console.log("📦 Using regular upload for file:", file.size, "bytes");
     if (file.size > 1024 * 1024) {
       console.log("⚠️ Large file detected - this may take a moment to process");
     }
