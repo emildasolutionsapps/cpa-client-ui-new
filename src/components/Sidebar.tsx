@@ -11,9 +11,11 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import { motion } from 'framer-motion';
+
 import { useAuth } from '../contexts/AuthContext';
 import { UnreadService, badgeEventEmitter } from '../services/unreadService';
+import { useMobileSidebar } from '../App';
+import { COMPANY_LOGO_URL, COMPANY_NAME, COMPANY_TAGLINE } from '../constants/branding';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -36,6 +38,7 @@ export default function Sidebar() {
     hasClientAccess
   } = useAuth();
 
+  const { isMobileMenuOpen, setIsMobileMenuOpen } = useMobileSidebar();
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
 
@@ -103,23 +106,43 @@ export default function Sidebar() {
     return email.split('@')[0].slice(0, 2).toUpperCase();
   };
 
+  const handleNavClick = () => {
+    // Close mobile menu when navigating on mobile
+    if (isMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+  };
+
   return (
-    <motion.div
-      className="fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-xl border-r border-slate-200/60 shadow-xl flex flex-col"
-      initial={{ x: -100, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
+    <div
+      className={`fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-xl border-r border-slate-200/60 shadow-xl flex flex-col z-50 transition-transform duration-300 ease-in-out ${
+        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+      } lg:translate-x-0`}
     >
       <div className="p-6 flex-1">
-        <div className="flex items-center space-x-3 mb-8">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-            <BuildingOfficeIcon className="w-6 h-6 text-white" />
+        <div className="hidden lg:flex items-center space-x-3 mb-8">
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-200">
+            <img
+              src={COMPANY_LOGO_URL}
+              alt={COMPANY_NAME}
+              className="w-8 h-8 object-contain"
+              onError={(e) => {
+                // Fallback to icon if logo fails to load
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <BuildingOfficeIcon className="w-6 h-6 text-blue-600 hidden" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900">VVV CPA PC</h1>
-            <p className="text-sm text-slate-500">Client Portal</p>
+            <h1 className="text-lg font-bold text-slate-900">{COMPANY_NAME}</h1>
+            <p className="text-sm text-slate-500">{COMPANY_TAGLINE}</p>
           </div>
         </div>
+
+        {/* Mobile spacing */}
+        <div className="lg:hidden mb-6"></div>
 
         {/* Client Profile Switcher */}
         <div className="mb-6">
@@ -170,6 +193,7 @@ export default function Sidebar() {
             <NavLink
               key={item.name}
               to={item.href}
+              onClick={handleNavClick}
               className={({ isActive }) =>
                 `group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
@@ -222,6 +246,6 @@ export default function Sidebar() {
           <span>Sign Out</span>
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }

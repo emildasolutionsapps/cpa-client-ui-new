@@ -39,16 +39,16 @@ export default function FilterBar({}: FilterBarProps) {
     >
       {/* Header Section */}
       <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Your Tax Dashboard</h2>
-        <p className="text-slate-600">Select your preferences to view personalized information</p>
+        <h2 className="text-xl lg:text-2xl font-bold text-slate-900 mb-2">Your Tax Dashboard</h2>
+        <p className="text-sm lg:text-base text-slate-600">Select your preferences to view personalized information</p>
       </div>
 
       {/* Filter Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
 
         {/* Client Filter */}
         <motion.div
-          className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+          className="bg-white rounded-2xl p-4 lg:p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
           whileHover={{ scale: 1.02 }}
           transition={{ type: "spring", stiffness: 300 }}
         >
@@ -84,7 +84,7 @@ export default function FilterBar({}: FilterBarProps) {
 
         {/* Year Filter */}
         <motion.div
-          className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+          className="bg-white rounded-2xl p-4 lg:p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
           whileHover={{ scale: 1.02 }}
           transition={{ type: "spring", stiffness: 300 }}
         >
@@ -120,7 +120,7 @@ export default function FilterBar({}: FilterBarProps) {
 
         {/* Job Filter */}
         <motion.div
-          className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+          className="bg-white rounded-2xl p-4 lg:p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
           whileHover={{ scale: 1.02 }}
           transition={{ type: "spring", stiffness: 300 }}
         >

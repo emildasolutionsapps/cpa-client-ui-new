@@ -41,8 +41,8 @@ export default function StatusCard({
   onClick
 }: StatusCardProps) {
   return (
-    <motion.div 
-      className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-all duration-200"
+    <motion.div
+      className="bg-white rounded-2xl p-4 lg:p-6 shadow-sm border border-slate-200 hover:shadow-md transition-all duration-200"
       whileHover={{ y: -2 }}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}

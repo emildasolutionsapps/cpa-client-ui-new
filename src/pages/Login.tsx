@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import { LockClosedIcon, EyeIcon, EyeSlashIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../contexts/AuthContext'
+import { COMPANY_LOGO_URL, COMPANY_NAME } from '../constants/branding'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -63,15 +64,26 @@ export default function Login() {
         transition={{ duration: 0.6 }}
       >
         <div className="text-center mb-8">
-          <motion.div 
-            className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-            animate={{ rotate: [0, 5, -5, 0] }}
-            transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+          <motion.div
+            className="w-16 h-16 bg-white rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg border border-slate-200"
+            animate={{ rotate: [0, 2, -2, 0] }}
+            transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 }}
           >
-            <LockClosedIcon className="w-8 h-8 text-white" />
+            <img
+              src={COMPANY_LOGO_URL}
+              alt={COMPANY_NAME}
+              className="w-12 h-12 object-contain"
+              onError={(e) => {
+                // Fallback to icon if logo fails to load
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <BuildingOfficeIcon className="w-8 h-8 text-blue-600 hidden" />
           </motion.div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome Back</h1>
-          <p className="text-slate-600">Sign in to your VVV CPA PC portal</p>
+          <p className="text-slate-600">Sign in to your {COMPANY_NAME} portal</p>
         </div>
 
         <motion.div 

@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  DocumentCheckIcon,
   UserIcon,
   CloudArrowUpIcon,
-  BanknotesIcon,
-  ChartBarIcon,
-  DocumentArrowDownIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import FilterBar from '../components/FilterBar';
-import StatusCard from '../components/StatusCard';
 import UploadZone from '../components/UploadZone';
 
 import { useClientData } from '../hooks/useClientData';
@@ -101,7 +96,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto px-2 lg:px-0">
       <FilterBar />
 
 
@@ -136,35 +131,7 @@ export default function Dashboard() {
         <UploadZone selectedJobId={selectedJobId} selectedJobName={selectedJobName} />
       </motion.div>
 
-      {/* Status Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <StatusCard
-          icon={DocumentCheckIcon}
-          title="Documents"
-          status={loadingDocuments ? 'Loading...' : documentsError ? 'Error' : 'Available'}
-          statusColor={loadingDocuments ? 'slate' : documentsError ? 'red' : documents.length > 0 ? 'emerald' : 'amber'}
-          description={loadingDocuments ? 'Loading documents...' : documentsError ? 'Failed to load documents' : `${documents.length} documents uploaded`}
-          count={loadingDocuments ? '...' : `${documents.length}`}
-        />
 
-        <StatusCard
-          icon={ChartBarIcon}
-          title="Active Jobs"
-          status={loadingJobs ? 'Loading...' : jobsError ? 'Error' : 'Active'}
-          statusColor={loadingJobs ? 'slate' : jobsError ? 'red' : jobs.length > 0 ? 'blue' : 'amber'}
-          description={loadingJobs ? 'Loading jobs...' : jobsError ? 'Failed to load jobs' : `${jobs.length} active jobs`}
-          count={loadingJobs ? '...' : `${jobs.length}`}
-        />
-
-        <StatusCard
-          icon={UserIcon}
-          title="Messages"
-          status={loadingMessages ? 'Loading...' : messagesError ? 'Error' : 'Available'}
-          statusColor={loadingMessages ? 'slate' : messagesError ? 'red' : messages.length > 0 ? 'emerald' : 'amber'}
-          description={loadingMessages ? 'Loading messages...' : messagesError ? 'Failed to load messages' : `${messages.length} messages`}
-          count={loadingMessages ? '...' : `${messages.length}`}
-        />
-      </div>
 
       {/* Payment Information Section */}
       {/* <motion.div 

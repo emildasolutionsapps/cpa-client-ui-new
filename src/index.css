@@ -10,11 +10,13 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
-  
+
   body {
     @apply text-slate-900 antialiased;
     font-feature-settings: 'cv01', 'cv03', 'cv04', 'cv09';
+    overflow-x: hidden;
   }
 
   /* Prevent body scroll on chat pages */
