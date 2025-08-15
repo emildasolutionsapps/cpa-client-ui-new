@@ -7,6 +7,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useClientData } from '../hooks/useClientData';
 import { PaymentMethodsList } from '../components/PaymentMethodsList';
+import { BillingInformation } from '../components/BillingInformation';
 
 
 
@@ -47,11 +48,21 @@ export default function Billing() {
       >
         <h1 className="text-2xl font-bold text-slate-900 mb-8">Billing & Payment Methods</h1>
 
-        {/* Payment Methods Section */}
+        {/* Billing Information Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
+          className="mb-8"
+        >
+          <BillingInformation clientId={selectedClient.ClientID} />
+        </motion.div>
+
+        {/* Payment Methods Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
           className="mb-8"
         >
           <PaymentMethodsList clientId={selectedClient.ClientID} />
@@ -62,7 +73,7 @@ export default function Billing() {
           className="bg-slate-50 rounded-2xl p-6 border-2 border-dashed border-slate-300 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
         >
           <div className="text-center py-8">
             <DocumentArrowDownIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
