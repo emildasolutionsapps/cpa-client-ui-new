@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar';
 import MobileHeader from './components/MobileHeader';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import SetPassword from './pages/SetPassword';
 import MFASetup from './pages/MFASetup';
 import MFAVerify from './pages/MFAVerify';
@@ -57,6 +58,7 @@ function App() {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/mfa-setup" element={<MFASetup />} />
             <Route path="/mfa-verify" element={<MFAVerify />} />
