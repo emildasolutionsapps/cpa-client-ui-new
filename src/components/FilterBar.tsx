@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDownIcon, UserIcon, CalendarIcon, BriefcaseIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, UserIcon, CalendarIcon, BriefcaseIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useFilters } from '../contexts/FilterContext';
@@ -20,14 +20,11 @@ export default function FilterBar({}: FilterBarProps) {
     selectedYear,
     selectedJobId,
     selectedJobName,
-    selectedStatus,
     availableYears,
-    availableStatuses,
     getFilteredJobs,
     loadingJobs,
     setSelectedYear,
-    setSelectedJobId,
-    setSelectedStatus
+    setSelectedJobId
   } = useFilters();
 
   const handleJobChange = (jobId: string) => {
@@ -47,7 +44,7 @@ export default function FilterBar({}: FilterBarProps) {
       </div>
 
       {/* Filter Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
 
         {/* Client Filter */}
         <motion.div
@@ -162,39 +159,6 @@ export default function FilterBar({}: FilterBarProps) {
           </div>
         </motion.div>
 
-        {/* Status Filter */}
-        <motion.div
-          className="bg-white rounded-2xl p-4 lg:p-6 shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-          whileHover={{ scale: 1.02 }}
-          transition={{ type: "spring", stiffness: 300 }}
-        >
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <CheckCircleIcon className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900">Status</h3>
-              <p className="text-xs text-slate-500">Filter by status</p>
-            </div>
-          </div>
-          <div className="relative">
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              disabled={availableStatuses.length === 0}
-              className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-purple-300 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 transition-all duration-200 disabled:opacity-50"
-            >
-              <option value="">All Statuses</option>
-              {availableStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-            <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-          </div>
-        </motion.div>
-
       </div>
 
       {/* Status Indicator */}
@@ -207,7 +171,7 @@ export default function FilterBar({}: FilterBarProps) {
         <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2 rounded-full border border-blue-100">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
           <span className="text-sm font-medium text-slate-700">
-            Viewing: {selectedClient?.ClientName || 'No client selected'} • {selectedYear} • {selectedJobName || 'No service selected'} {selectedStatus && `• ${selectedStatus}`}
+            Viewing: {selectedClient?.ClientName || 'No client selected'} • {selectedYear} • {selectedJobName || 'No service selected'}
           </span>
         </div>
       </motion.div>
