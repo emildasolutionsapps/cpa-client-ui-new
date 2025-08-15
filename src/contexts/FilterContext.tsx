@@ -71,19 +71,27 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
           setAvailableJobs([]);
           setAvailableYears([]);
         } else {
-          setAvailableJobs(jobs || []);
+          const safeJobs = jobs || [];
+          setAvailableJobs(safeJobs);
 
           // Extract years from jobs that actually exist for this client
           const years = new Set<string>();
-          jobs?.forEach(job => {
-            // Try to extract year from job name first (more reliable)
-            const yearMatch = job.JobName.match(/20\d{2}/);
-            if (yearMatch) {
-              years.add(yearMatch[0]);
-            } else {
-              // Fallback to creation date year if no year in job name
-              const createdYear = new Date(job.CreatedAt).getFullYear().toString();
-              years.add(createdYear);
+          safeJobs.forEach(job => {
+            // Ensure job object exists and has required properties
+            if (!job || !job.JobName || !job.CreatedAt) return;
+
+            try {
+              // Try to extract year from job name first (more reliable)
+              const yearMatch = job.JobName.match(/20\d{2}/);
+              if (yearMatch) {
+                years.add(yearMatch[0]);
+              } else {
+                // Fallback to creation date year if no year in job name
+                const createdYear = new Date(job.CreatedAt).getFullYear().toString();
+                years.add(createdYear);
+              }
+            } catch (error) {
+              console.warn('Error processing job for year extraction:', job, error);
             }
           });
 
@@ -145,9 +153,15 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
 
   // Get filtered jobs based on selected year
   const getFilteredJobs = (): Job[] => {
-    if (!selectedYear) return availableJobs;
+    // Ensure availableJobs is always an array
+    const jobs = availableJobs || [];
 
-    return availableJobs.filter(job => {
+    if (!selectedYear) return jobs;
+
+    return jobs.filter(job => {
+      // Ensure job object exists and has required properties
+      if (!job || !job.JobName || !job.CreatedAt) return false;
+
       // First try to match year from job name (more reliable)
       const yearMatch = job.JobName.match(/20\d{2}/);
       if (yearMatch && yearMatch[0] === selectedYear) {
@@ -156,8 +170,13 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
 
       // If no year in job name, fallback to creation date
       if (!yearMatch) {
-        const createdYear = new Date(job.CreatedAt).getFullYear().toString();
-        return createdYear === selectedYear;
+        try {
+          const createdYear = new Date(job.CreatedAt).getFullYear().toString();
+          return createdYear === selectedYear;
+        } catch (error) {
+          console.warn('Invalid date in job CreatedAt:', job.CreatedAt);
+          return false;
+        }
       }
 
       return false;
