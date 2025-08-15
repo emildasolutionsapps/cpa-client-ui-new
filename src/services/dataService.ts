@@ -16,6 +16,14 @@ export interface Job {
   CreatedAt: string;
   UpdatedAt: string;
   CreatedBy?: string;
+  // Status information (populated via JOIN)
+  StatusName?: string;
+  StatusColor?: string;
+  ClientFacingStatus?: 'Action Required' | 'In Progress' | 'In Review' | 'Completed';
+  IsFinalStatus?: boolean;
+  // Service template information (populated via JOIN)
+  ServiceTemplateName?: string;
+  ServiceTemplateDescription?: string;
 }
 
 export interface Document {
@@ -43,14 +51,41 @@ export interface Message {
 
 // Data service class
 export class DataService {
-  // Fetch jobs for a specific client
+  // Fetch jobs for a specific client with status and service template information
   static async getJobsForClient(
     clientId: string,
   ): Promise<{ data: Job[] | null; error: any }> {
     try {
       const { data, error } = await supabase
         .from("Jobs")
-        .select("*")
+        .select(`
+          JobID,
+          ClientID,
+          ServiceTemplateID,
+          ParentJobID,
+          LeadID,
+          JobName,
+          CurrentStatusID,
+          HasTaxMetrics,
+          Priority,
+          DueDate,
+          TotalBudgetedHours,
+          CreatedAt,
+          UpdatedAt,
+          CreatedBy,
+          Statuses!inner(
+            StatusID,
+            StatusName,
+            StatusColor,
+            ClientFacingStatus,
+            IsFinalStatus
+          ),
+          ServiceTemplates!inner(
+            TemplateID,
+            TemplateName,
+            Description
+          )
+        `)
         .eq("ClientID", clientId)
         .order("CreatedAt", { ascending: false });
 
@@ -59,7 +94,33 @@ export class DataService {
         return { data: null, error };
       }
 
-      return { data, error: null };
+      // Transform the data to include status and service template information
+      const transformedData = data?.map((job: any) => ({
+        JobID: job.JobID,
+        ClientID: job.ClientID,
+        ServiceTemplateID: job.ServiceTemplateID,
+        ParentJobID: job.ParentJobID,
+        LeadID: job.LeadID,
+        JobName: job.JobName,
+        CurrentStatusID: job.CurrentStatusID,
+        HasTaxMetrics: job.HasTaxMetrics,
+        Priority: job.Priority,
+        DueDate: job.DueDate,
+        TotalBudgetedHours: job.TotalBudgetedHours,
+        CreatedAt: job.CreatedAt,
+        UpdatedAt: job.UpdatedAt,
+        CreatedBy: job.CreatedBy,
+        // Status information
+        StatusName: job.Statuses?.StatusName,
+        StatusColor: job.Statuses?.StatusColor,
+        ClientFacingStatus: job.Statuses?.ClientFacingStatus,
+        IsFinalStatus: job.Statuses?.IsFinalStatus,
+        // Service template information
+        ServiceTemplateName: job.ServiceTemplates?.TemplateName,
+        ServiceTemplateDescription: job.ServiceTemplates?.Description,
+      })) || [];
+
+      return { data: transformedData, error: null };
     } catch (error) {
       console.error("Error in getJobsForClient:", error);
       return { data: null, error };

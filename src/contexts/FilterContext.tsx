@@ -1,25 +1,28 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { DocumentService, Job } from '../services/documentService';
+import { DataService, Job } from '../services/dataService';
 
 interface FilterContextType {
   // Filter states
   selectedYear: string;
   selectedJobId: string;
   selectedJobName: string;
-  
+  selectedStatus: string;
+
   // Available options
   availableJobs: Job[];
   availableYears: string[];
-  
+  availableStatuses: string[];
+
   // Loading states
   loadingJobs: boolean;
-  
+
   // Filter actions
   setSelectedYear: (year: string) => void;
   setSelectedJobId: (jobId: string) => void;
   setSelectedJobName: (jobName: string) => void;
-  
+  setSelectedStatus: (status: string) => void;
+
   // Utility functions
   getFilteredJobs: () => Job[];
   resetFilters: () => void;
@@ -46,10 +49,12 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   const [selectedYear, setSelectedYear] = useState('2025');
   const [selectedJobId, setSelectedJobId] = useState('');
   const [selectedJobName, setSelectedJobName] = useState('');
-  
+  const [selectedStatus, setSelectedStatus] = useState('');
+
   // Available options
   const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>(['2025', '2024', '2023', '2022', '2021']);
+  const [availableStatuses, setAvailableStatuses] = useState<string[]>([]);
   
   // Loading states
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -65,16 +70,18 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
 
       setLoadingJobs(true);
       try {
-        const { data: jobs, error } = await DocumentService.getClientJobs(selectedClientId);
+        const { data: jobs, error } = await DataService.getJobsForClient(selectedClientId);
         if (error) {
           console.error('Error loading jobs:', error);
           setAvailableJobs([]);
           setAvailableYears([]);
+          setAvailableStatuses([]);
         } else {
           setAvailableJobs(jobs || []);
 
           // Extract years from jobs that actually exist for this client
           const years = new Set<string>();
+          const statuses = new Set<string>();
           jobs?.forEach(job => {
             // Try to extract year from job name first (more reliable)
             const yearMatch = job.JobName.match(/20\d{2}/);
@@ -85,11 +92,20 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
               const createdYear = new Date(job.CreatedAt).getFullYear().toString();
               years.add(createdYear);
             }
+
+            // Collect unique client-facing statuses
+            if (job.ClientFacingStatus) {
+              statuses.add(job.ClientFacingStatus);
+            }
           });
 
           // Only show years that have jobs - sort newest first
           const sortedYears = Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
           setAvailableYears(sortedYears);
+
+          // Set available statuses
+          const sortedStatuses = Array.from(statuses).sort();
+          setAvailableStatuses(sortedStatuses);
 
           // Auto-select the most recent year if current selection is not available
           if (sortedYears.length > 0 && !sortedYears.includes(selectedYear)) {
@@ -100,6 +116,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
         console.error('Error loading jobs:', error);
         setAvailableJobs([]);
         setAvailableYears([]);
+        setAvailableStatuses([]);
       } finally {
         setLoadingJobs(false);
       }
@@ -112,6 +129,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   useEffect(() => {
     setSelectedJobId('');
     setSelectedJobName('');
+    setSelectedStatus('');
   }, [selectedClientId]);
 
   // Auto-select first job when jobs are loaded
@@ -143,25 +161,35 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
     }
   }, [availableJobs, selectedYear, selectedJobId]);
 
-  // Get filtered jobs based on selected year
+  // Get filtered jobs based on selected year and status
   const getFilteredJobs = (): Job[] => {
-    if (!selectedYear) return availableJobs;
+    let filteredJobs = availableJobs;
 
-    return availableJobs.filter(job => {
-      // First try to match year from job name (more reliable)
-      const yearMatch = job.JobName.match(/20\d{2}/);
-      if (yearMatch && yearMatch[0] === selectedYear) {
-        return true;
-      }
+    // Filter by year
+    if (selectedYear) {
+      filteredJobs = filteredJobs.filter(job => {
+        // First try to match year from job name (more reliable)
+        const yearMatch = job.JobName.match(/20\d{2}/);
+        if (yearMatch && yearMatch[0] === selectedYear) {
+          return true;
+        }
 
-      // If no year in job name, fallback to creation date
-      if (!yearMatch) {
-        const createdYear = new Date(job.CreatedAt).getFullYear().toString();
-        return createdYear === selectedYear;
-      }
+        // If no year in job name, fallback to creation date
+        if (!yearMatch) {
+          const createdYear = new Date(job.CreatedAt).getFullYear().toString();
+          return createdYear === selectedYear;
+        }
 
-      return false;
-    });
+        return false;
+      });
+    }
+
+    // Filter by status
+    if (selectedStatus) {
+      filteredJobs = filteredJobs.filter(job => job.ClientFacingStatus === selectedStatus);
+    }
+
+    return filteredJobs;
   };
 
   // Reset all filters
@@ -169,6 +197,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
     setSelectedYear('2025');
     setSelectedJobId('');
     setSelectedJobName('');
+    setSelectedStatus('');
   };
 
   // Update job name when job ID changes
@@ -188,19 +217,22 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
     selectedYear,
     selectedJobId,
     selectedJobName,
-    
+    selectedStatus,
+
     // Available options
     availableJobs,
     availableYears,
-    
+    availableStatuses,
+
     // Loading states
     loadingJobs,
-    
+
     // Filter actions
     setSelectedYear,
     setSelectedJobId,
     setSelectedJobName,
-    
+    setSelectedStatus,
+
     // Utility functions
     getFilteredJobs,
     resetFilters,
