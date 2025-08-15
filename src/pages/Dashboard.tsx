@@ -9,13 +9,18 @@ import FilterBar from '../components/FilterBar';
 import UploadZone from '../components/UploadZone';
 import PendingDocumentsCard from '../components/PendingDocumentsCard';
 import PendingSignaturesCard from '../components/PendingSignaturesCard';
+import JobStatusBanner from '../components/JobStatusBanner';
+import JobStatusCard from '../components/JobStatusCard';
+import JobSelector from '../components/JobSelector';
 
 import { useClientData } from '../hooks/useClientData';
 import { useAuth } from '../contexts/AuthContext';
 import { useFilters } from '../contexts/FilterContext';
+import { Job } from '../services/dataService';
 
 export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   // Document status - can be 'complete' or 'pending'
   const [documentStatus, setDocumentStatus] = useState<'complete' | 'pending'>('pending');
@@ -49,6 +54,13 @@ export default function Dashboard() {
   ];
 
   const toggleModal = () => setIsModalOpen(!isModalOpen);
+
+  // Set the first job as selected by default when jobs are loaded
+  React.useEffect(() => {
+    if (jobs && jobs.length > 0 && !selectedJob) {
+      setSelectedJob(jobs[0]);
+    }
+  }, [jobs, selectedJob]);
 
   // Show loading state while checking client access
   if (loadingClients) {
@@ -111,34 +123,59 @@ export default function Dashboard() {
         <PendingSignaturesCard clientId={selectedClient.ClientID} />
       )}
 
+      {/* Job Selector */}
+      {jobs && jobs.length > 0 && (
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <JobSelector
+            jobs={jobs}
+            selectedJob={selectedJob}
+            onJobSelect={setSelectedJob}
+            loading={loadingJobs}
+          />
+        </motion.div>
+      )}
+
       {/* Main Status Banner */}
-      {/* <motion.div 
-        className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-8 text-white mb-8 shadow-lg"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Your 2025 Tax Return is currently in Review 🕵️</h1>
-            <p className="text-blue-100">Our team is carefully reviewing your documents. We'll notify you of any updates.</p>
+      {selectedJob && (
+        <JobStatusBanner job={selectedJob} showProgress={true} />
+      )}
+
+      {/* Job Status Cards - Show all jobs */}
+      {jobs && jobs.length > 1 && (
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
+          <h2 className="text-xl font-semibold text-slate-900 mb-6">All Your Jobs</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {jobs.map((job) => (
+              <JobStatusCard
+                key={job.JobID}
+                job={job}
+                onClick={() => setSelectedJob(job)}
+                showProgress={true}
+              />
+            ))}
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold">85%</div>
-            <div className="text-blue-100">Complete</div>
-          </div>
-        </div>
-      </motion.div> */}
+        </motion.div>
+      )}
 
       {/* Upload Documents - Higher Priority */}
-      <motion.div 
+      <motion.div
         className="mb-8"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.1 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
       >
         <h2 className="text-xl font-semibold text-slate-900 mb-4">Upload Documents</h2>
-        <UploadZone selectedJobId={selectedJobId} selectedJobName={selectedJobName} />
+        <UploadZone selectedJobId={selectedJob?.JobID || selectedJobId} selectedJobName={selectedJob?.JobName || selectedJobName} />
       </motion.div>
 
 
