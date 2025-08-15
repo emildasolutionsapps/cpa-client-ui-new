@@ -139,6 +139,23 @@ export default function Documents() {
     }
   };
 
+  // Test S3 connection (Development only)
+  const handleS3Test = async () => {
+    try {
+      setS3TestResult('Testing S3 connection...');
+      const result = await testS3Connection();
+
+      if (result.success) {
+        setS3TestResult('✅ S3 connection successful!');
+      } else {
+        setS3TestResult(`❌ S3 connection failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error testing S3 connection:', error);
+      setS3TestResult(`❌ S3 test error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   // Render S3 files for a specific folder type
   const renderS3Files = (folderType: string, tabName: string, tabColor: string, canUpload: boolean = false) => {
     const files = s3Files[folderType] || [];
