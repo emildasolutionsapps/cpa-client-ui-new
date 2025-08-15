@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { signatureBadgeEventEmitter } from "./signatureBadgeService";
 
 export interface SignatureRequest {
   RequestID: string;
@@ -137,8 +138,13 @@ export class SignatureService {
       if (request.BoldSignDocumentID && request.SignerEmail) {
         console.log("SignatureService: Fetching signing URL from BoldSign API");
 
+        console.log('SignatureService: Making request to BoldSign API with:', {
+          documentId: request.BoldSignDocumentID,
+          signerEmail: request.SignerEmail,
+        });
+
         const response = await fetch(
-          `https://cjgzilrlesuiaxtexnfk.supabase.co/functions/v1/boldsign-api/signing-url`,
+          `https://cjgzilrlesuiaxtexnfk.supabase.co/functions/v1/boldsign-api`,
           {
             method: "POST",
             headers: {
@@ -150,6 +156,9 @@ export class SignatureService {
             }),
           },
         );
+
+        console.log('SignatureService: Response status:', response.status);
+        console.log('SignatureService: Response headers:', Object.fromEntries(response.headers.entries()));
 
         const result = await response.json();
         console.log("SignatureService: BoldSign API response:", result);
@@ -183,7 +192,7 @@ export class SignatureService {
   /**
    * Update signature request status (for local updates)
    */
-  static async updateRequestStatus(requestId: string, status: string): Promise<{
+  static async updateRequestStatus(requestId: string, status: string, clientId?: string): Promise<{
     success: boolean;
     error?: string;
   }> {
@@ -198,6 +207,11 @@ export class SignatureService {
 
       if (error) {
         return { success: false, error: error.message };
+      }
+
+      // Emit badge update if clientId provided
+      if (clientId) {
+        signatureBadgeEventEmitter.emit(clientId);
       }
 
       return { success: true };

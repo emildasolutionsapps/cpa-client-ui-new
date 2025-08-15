@@ -7,9 +7,11 @@ import {
 } from '@heroicons/react/24/outline';
 import FilterBar from '../components/FilterBar';
 import UploadZone from '../components/UploadZone';
+import PendingDocumentsCard from '../components/PendingDocumentsCard';
+import PendingSignaturesCard from '../components/PendingSignaturesCard';
 import JobStatusBanner from '../components/JobStatusBanner';
 import JobStatusCard from '../components/JobStatusCard';
-import JobSelector from '../components/JobSelector';
+
 
 import { useClientData } from '../hooks/useClientData';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +20,6 @@ import { Job } from '../services/dataService';
 
 export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   // Document status - can be 'complete' or 'pending'
   const [documentStatus, setDocumentStatus] = useState<'complete' | 'pending'>('pending');
@@ -53,12 +54,8 @@ export default function Dashboard() {
 
   const toggleModal = () => setIsModalOpen(!isModalOpen);
 
-  // Set the first job as selected by default when jobs are loaded
-  React.useEffect(() => {
-    if (jobs && jobs.length > 0 && !selectedJob) {
-      setSelectedJob(jobs[0]);
-    }
-  }, [jobs, selectedJob]);
+  // Get the selected job from filters
+  const selectedJob = jobs?.find(job => job.JobID === selectedJobId) || null;
 
   // Show loading state while checking client access
   if (loadingClients) {
@@ -111,46 +108,44 @@ export default function Dashboard() {
     <div className="max-w-7xl mx-auto px-2 lg:px-0">
       <FilterBar />
 
-      {/* Job Selector */}
-      {jobs && jobs.length > 0 && (
+      {/* Pending Documents Warning Card */}
+      {selectedClient?.ClientID && (
+        <PendingDocumentsCard clientId={selectedClient.ClientID} />
+      )}
+
+      {/* Pending Signatures Warning Card */}
+      {selectedClient?.ClientID && (
+        <PendingSignaturesCard clientId={selectedClient.ClientID} />
+      )}
+
+
+
+      {/* Simple Status Display */}
+      {selectedJob && (
         <motion.div
-          className="mb-6"
+          className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-8 text-white mb-8 shadow-lg"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <JobSelector
-            jobs={jobs}
-            selectedJob={selectedJob}
-            onJobSelect={setSelectedJob}
-            loading={loadingJobs}
-          />
-        </motion.div>
-      )}
-
-      {/* Main Status Banner */}
-      {selectedJob && (
-        <JobStatusBanner job={selectedJob} showProgress={true} />
-      )}
-
-      {/* Job Status Cards - Show all jobs */}
-      {jobs && jobs.length > 1 && (
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          <h2 className="text-xl font-semibold text-slate-900 mb-6">All Your Jobs</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {jobs.map((job) => (
-              <JobStatusCard
-                key={job.JobID}
-                job={job}
-                onClick={() => setSelectedJob(job)}
-                showProgress={true}
-              />
-            ))}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold mb-2">
+                {selectedJob.JobName} - {selectedJob.ClientFacingStatus || 'In Progress'}
+              </h1>
+              <p className="text-blue-100">
+                Service: {selectedJob.ServiceTemplateName || 'Tax Service'}
+              </p>
+              {selectedJob.DueDate && (
+                <p className="text-blue-100 mt-1">
+                  Due Date: {new Date(selectedJob.DueDate).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-medium text-blue-100">Status</div>
+              <div className="text-3xl font-bold">{selectedJob.ClientFacingStatus || 'In Progress'}</div>
+            </div>
           </div>
         </motion.div>
       )}
@@ -160,10 +155,10 @@ export default function Dashboard() {
         className="mb-8"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2 }}
+        transition={{ duration: 0.6, delay: 0.1 }}
       >
         <h2 className="text-xl font-semibold text-slate-900 mb-4">Upload Documents</h2>
-        <UploadZone selectedJobId={selectedJob?.JobID || selectedJobId} selectedJobName={selectedJob?.JobName || selectedJobName} />
+        <UploadZone selectedJobId={selectedJobId} selectedJobName={selectedJobName} />
       </motion.div>
 
 

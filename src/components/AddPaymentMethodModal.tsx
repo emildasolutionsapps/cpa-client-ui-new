@@ -36,7 +36,7 @@ export const AddPaymentMethodModal: React.FC<AddPaymentMethodModalProps> = ({
       clientId,
       paymentType: 'credit_card',
       isDefault: false,
-      autoPayEnabled: false
+
     },
     errors: { isValid: true },
     loading: false
@@ -51,7 +51,7 @@ export const AddPaymentMethodModal: React.FC<AddPaymentMethodModalProps> = ({
         clientId,
         paymentType: 'credit_card',
         isDefault: false,
-        autoPayEnabled: false
+
       },
       errors: { isValid: true },
       loading: false
@@ -509,19 +509,7 @@ export const AddPaymentMethodModal: React.FC<AddPaymentMethodModalProps> = ({
                     />
                   </div>
 
-                  {/* Auto Pay */}
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="autoPay"
-                      checked={formState.data.autoPayEnabled || false}
-                      onChange={(e) => handleInputChange('autoPayEnabled', e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
-                    />
-                    <label htmlFor="autoPay" className="ml-2 block text-sm text-slate-700">
-                      Enable automatic payments
-                    </label>
-                  </div>
+
                 </div>
               </motion.div>
             )}

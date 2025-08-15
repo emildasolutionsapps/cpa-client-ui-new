@@ -5,18 +5,20 @@ import {
   PaperClipIcon,
   UserIcon,
   ArrowPathIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
 import { ChatService, ChatMessage } from '../services/chatService';
-import { UnreadService } from '../services/unreadService';
+import { ConversationThreadService } from '../services/conversationThreadService';
 
 const Messages: React.FC = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [markingAsRead, setMarkingAsRead] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { user, selectedClient, selectedClientId } = useAuth();
@@ -28,6 +30,25 @@ const Messages: React.FC = () => {
   };
 
   const refreshMessages = () => setRefreshKey(k => k + 1);
+
+  const handleMarkAsRead = async () => {
+    if (!selectedClientId || !user?.id) return;
+
+    setMarkingAsRead(true);
+    try {
+      console.log('Messages: Marking conversation as read');
+      await ConversationThreadService.resetConversationThread(
+        selectedClientId,
+        user.id,
+        'mark_read'
+      );
+      console.log('Messages: Conversation marked as read successfully');
+    } catch (error) {
+      console.error('Messages: Error marking conversation as read:', error);
+    } finally {
+      setMarkingAsRead(false);
+    }
+  };
 
   const downloadAttachment = async (url: string, filename: string) => {
     try {
@@ -54,14 +75,8 @@ const Messages: React.FC = () => {
       const data = await ChatService.getMessages(selectedClientId);
       setMessages(data);
 
-      // Mark messages as read and log the action
-      console.log('Client Messages: Marking messages as read after loading');
-      if (user?.id) {
-        await UnreadService.markAsRead(selectedClientId, user.id);
-        console.log('Client Messages: Messages marked as read successfully');
-      } else {
-        console.warn('Client Messages: No user ID available, skipping mark as read');
-      }
+      // Note: We no longer automatically mark messages as read when viewing
+      // Users must either reply or use the "Mark as Read" button
 
       // Scroll after loading messages
       setTimeout(scrollToBottom, 200);
@@ -104,17 +119,8 @@ const Messages: React.FC = () => {
             });
             scrollToBottom();
 
-            // If the new message is from admin (not from current client), mark it as read immediately
-            // since the user is actively viewing the conversation
-            if (newMessage.senderType !== 'client' && user?.id) {
-              console.log('Client Messages: New admin message received, marking as read');
-              try {
-                await UnreadService.markAsRead(selectedClientId, user.id);
-                console.log('Client Messages: New admin message marked as read');
-              } catch (error) {
-                console.error('Client Messages: Error marking new admin message as read:', error);
-              }
-            }
+            // Note: We no longer automatically mark new admin messages as read
+            // The badge will show the count and users can reply or use "Mark as Read"
           }
         );
       } catch (error) {
@@ -276,18 +282,29 @@ const Messages: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            onClick={refreshMessages}
-            disabled={loading}
-            title="Refresh messages"
-            className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <ArrowPathIcon
-              className={`w-5 h-5 ${
-                loading ? 'animate-spin' : ''
-              }`}
-            />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleMarkAsRead}
+              disabled={markingAsRead}
+              title="Mark conversation as read"
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <CheckIcon className={`w-4 h-4 ${markingAsRead ? 'animate-pulse' : ''}`} />
+              <span>{markingAsRead ? 'Marking...' : 'Mark as Read'}</span>
+            </button>
+            <button
+              onClick={refreshMessages}
+              disabled={loading}
+              title="Refresh messages"
+              className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <ArrowPathIcon
+                className={`w-5 h-5 ${
+                  loading ? 'animate-spin' : ''
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

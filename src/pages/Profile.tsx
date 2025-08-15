@@ -5,16 +5,14 @@ import {
   ShieldCheckIcon,
   BanknotesIcon,
   PencilSquareIcon,
-  UserPlusIcon,
-  EyeIcon,
-  EyeSlashIcon
+  UserPlusIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
 import ChangeRequestModal from '../components/ChangeRequestModal';
 import SpouseAccessModal from '../components/SpouseAccessModal';
 
 export default function Profile() {
-  const [showSSN, setShowSSN] = useState(false);
+
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,8 +36,6 @@ export default function Profile() {
   const profileData = {
     name: user?.user_metadata?.full_name || 'User',
     email: user?.email || 'user@example.com',
-    ssn: '***-**-6789',
-    ssnFull: '123-45-6789',
     address: '123 Main Street, Anytown, ST 12345',
     phone: '(555) 123-4567',
     dateJoined: 'January 2024',
@@ -113,20 +109,6 @@ export default function Profile() {
               </div>
             </div>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Social Security Number</label>
-                <div className="flex items-center space-x-2">
-                  <p className="text-slate-900 bg-slate-50 p-3 rounded-lg flex-1">
-                    {showSSN ? profileData.ssnFull : profileData.ssn}
-                  </p>
-                  <button
-                    onClick={() => setShowSSN(!showSSN)}
-                    className="p-3 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    {showSSN ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
                 <p className="text-slate-900 bg-slate-50 p-3 rounded-lg">{profileData.address}</p>
