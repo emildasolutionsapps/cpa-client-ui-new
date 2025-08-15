@@ -212,8 +212,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resetPassword = async (email: string) => {
+    // Use production URL for password reset redirect
+    const resetUrl = window.location.hostname === 'localhost'
+      ? `${window.location.origin}/set-password`
+      : 'https://vvvcpaclient.netlify.app/set-password';
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/set-password`,
+      redirectTo: resetUrl,
     })
     return { error }
   }
