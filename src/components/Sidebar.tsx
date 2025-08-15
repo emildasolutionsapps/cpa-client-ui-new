@@ -115,7 +115,7 @@ export default function Sidebar() {
 
   return (
     <div
-      className={`fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-xl border-r border-slate-200/60 shadow-xl flex flex-col z-50 transition-transform duration-300 ease-in-out ${
+      className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700/60 shadow-xl flex flex-col z-50 transition-transform duration-300 ease-in-out ${
         isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}
     >
@@ -136,8 +136,8 @@ export default function Sidebar() {
             <BuildingOfficeIcon className="w-6 h-6 text-blue-600 hidden" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900">{COMPANY_NAME}</h1>
-            <p className="text-sm text-slate-500">{COMPANY_TAGLINE}</p>
+            <h1 className="text-lg font-bold text-white">{COMPANY_NAME}</h1>
+            <p className="text-sm text-slate-300">{COMPANY_TAGLINE}</p>
           </div>
         </div>
 
@@ -146,16 +146,16 @@ export default function Sidebar() {
 
         {/* Client Profile Switcher */}
         <div className="mb-6">
-          <label className="block text-xs font-medium text-slate-600 mb-2">
+          <label className="block text-xs font-medium text-slate-300 mb-2">
             Client Profile
           </label>
 
           {loadingClients ? (
-            <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-500">
+            <div className="bg-slate-700/50 border-2 border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-300">
               Loading client access...
             </div>
           ) : clientsError ? (
-            <div className="bg-red-50 border-2 border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">
+            <div className="bg-red-900/30 border-2 border-red-700 rounded-xl px-4 py-3 text-sm text-red-300">
               {clientsError}
             </div>
           ) : availableClients.length > 0 ? (
@@ -165,10 +165,10 @@ export default function Sidebar() {
                   value={selectedClient?.ClientID || ''}
                   onChange={(e) => setSelectedClient(e.target.value)}
                   disabled={loadingClients}
-                  className="appearance-none w-full bg-gradient-to-r from-slate-50 to-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-slate-800 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 disabled:opacity-50"
+                  className="appearance-none w-full bg-slate-700/50 border-2 border-slate-600 rounded-xl px-4 py-3 pr-10 text-sm font-medium text-white hover:border-blue-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200 disabled:opacity-50"
                 >
                   {availableClients.map((client) => (
-                    <option key={client.ClientID} value={client.ClientID}>
+                    <option key={client.ClientID} value={client.ClientID} className="bg-slate-800 text-white">
                       {client.ClientName}
                     </option>
                   ))}
@@ -176,13 +176,13 @@ export default function Sidebar() {
                 <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
               </div>
               {selectedClient && (
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   Code: {selectedClient.ClientCode}
                 </p>
               )}
             </>
           ) : (
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+            <div className="bg-amber-900/30 border-2 border-amber-700 rounded-xl px-4 py-3 text-sm text-amber-300">
               No client access available
             </div>
           )}
@@ -197,8 +197,8 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm'
-                    : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
                 }`
               }
             >
@@ -206,7 +206,7 @@ export default function Sidebar() {
                 <>
                   <item.icon
                     className={`w-5 h-5 transition-colors ${
-                      isActive ? 'text-blue-600' : 'text-slate-500 group-hover:text-slate-700'
+                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'
                     }`}
                   />
                   <span className="flex-1">{item.name}</span>
@@ -223,16 +223,16 @@ export default function Sidebar() {
       </div>
 
       {/* User section at bottom */}
-      <div className="p-6 border-t border-slate-200/60">
+      <div className="p-6 border-t border-slate-700/60">
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">
             {user?.email ? getUserInitials(user.email) : 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-900 truncate">
+            <p className="text-sm font-medium text-white truncate">
               {user?.email?.split('@')[0] || 'User'}
             </p>
-            <p className="text-xs text-slate-500 truncate">
+            <p className="text-xs text-slate-300 truncate">
               {user?.email || 'user@example.com'}
             </p>
           </div>
@@ -240,7 +240,7 @@ export default function Sidebar() {
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 transition-all duration-200"
+          className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-300 hover:bg-red-600/20 hover:text-red-400 transition-all duration-200"
         >
           <ArrowRightOnRectangleIcon className="w-5 h-5" />
           <span>Sign Out</span>
