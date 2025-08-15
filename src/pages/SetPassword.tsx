@@ -21,90 +21,69 @@ export default function SetPassword() {
   const { updatePassword, user } = useAuth()
 
   useEffect(() => {
-    const handleMagicLinkAuth = async () => {
+    const handleInvitationLink = async () => {
       setSessionLoading(true)
       setError('')
 
       try {
-        // Log all URL parameters for debugging
-        const allParams = Object.fromEntries(searchParams.entries())
-        console.log('URL parameters:', allParams)
+        // Check if user is already authenticated (magic link should have logged them in)
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-        // Check if this is a magic link with token and type parameters
-        const token = searchParams.get('token')
-        const type = searchParams.get('type')
+        console.log('Current session:', session)
+        console.log('URL Parameters:', Object.fromEntries(searchParams.entries()))
 
-        // Also check for other possible parameter names
-        const accessToken = searchParams.get('access_token')
-        const refreshToken = searchParams.get('refresh_token')
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          setError('Authentication error. Please try clicking the invitation link again.')
+          setHasValidSession(false)
+        } else if (session?.user) {
+          console.log('User authenticated successfully:', session.user)
 
-        if (token && type === 'magiclink') {
-          console.log('Processing magic link authentication with token:', token)
+          // Check if this is an invitation flow by looking at user metadata or URL params
+          const type = searchParams.get('type')
+          const isInviteFlow = type === 'magiclink' ||
+                              session.user.user_metadata?.full_name ||
+                              session.user.user_metadata?.user_type === 'Portal User'
 
-          // Verify the magic link token with Supabase
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'magiclink'
-          })
-
-          if (error) {
-            console.error('Magic link verification error:', error)
-            setError('Invalid or expired link. Please request a new invitation.')
-            setHasValidSession(false)
-          } else if (data.user) {
-            console.log('Magic link verified successfully:', data.user)
+          if (isInviteFlow || session.user.user_metadata?.user_type === 'Portal User') {
             setHasValidSession(true)
             setError('')
           } else {
-            setError('Authentication failed. Please request a new invitation.')
-            setHasValidSession(false)
-          }
-        } else if (accessToken && refreshToken) {
-          console.log('Processing magic link with access/refresh tokens')
-
-          // Set the session using the tokens
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          })
-
-          if (error) {
-            console.error('Session setup error:', error)
-            setError('Invalid or expired link. Please request a new invitation.')
-            setHasValidSession(false)
-          } else if (data.user) {
-            console.log('Session established successfully:', data.user)
-            setHasValidSession(true)
-            setError('')
-          } else {
-            setError('Authentication failed. Please request a new invitation.')
-            setHasValidSession(false)
+            // Not an invitation flow, redirect to login
+            console.log('Not an invitation flow, redirecting to login')
+            navigate('/login')
+            return
           }
         } else {
-          // Check if user is already authenticated (maybe they refreshed the page)
-          const { data: { session } } = await supabase.auth.getSession()
+          // No session found - check if we have URL parameters that indicate this should be an auth flow
+          const type = searchParams.get('type')
+          const hasAuthParams = searchParams.get('access_token') ||
+                               searchParams.get('refresh_token') ||
+                               searchParams.get('token_hash') ||
+                               searchParams.get('token')
 
-          if (session && session.user) {
-            console.log('Existing session found:', session.user)
-            setHasValidSession(true)
-            setError('')
-          } else {
-            console.log('No valid authentication found in URL or session')
-            setError('Invalid or expired link. Please request a new invitation.')
+          if (type === 'magiclink' || hasAuthParams) {
+            // This looks like an auth flow but no session - likely expired or invalid
+            setError('Invalid or expired invitation link. Please request a new invitation.')
             setHasValidSession(false)
+          } else {
+            // No auth params, just redirect to login
+            console.log('No session and no auth parameters, redirecting to login')
+            navigate('/login')
+            return
           }
         }
       } catch (err) {
-        console.error('Error handling magic link:', err)
-        setError('An error occurred while processing the link. Please try again.')
+        console.error('Error processing invitation:', err)
+        setError('An error occurred while processing your invitation. Please try again.')
         setHasValidSession(false)
       } finally {
         setSessionLoading(false)
       }
     }
 
-    handleMagicLinkAuth()
-  }, [searchParams])
+    handleInvitationLink()
+  }, [searchParams, navigate])
 
   const validatePassword = (password: string) => {
     const minLength = password.length >= 8

@@ -26,64 +26,53 @@ export default function ResetPassword() {
       setError('')
 
       try {
-        // Check if we have the required parameters for recovery
-        const tokenHash = searchParams.get('token_hash')
-        const type = searchParams.get('type')
-        const accessToken = searchParams.get('access_token')
-        const refreshToken = searchParams.get('refresh_token')
+        // Check if user is already authenticated (magic link should have logged them in)
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-        console.log('Password reset URL parameters:', { tokenHash, type, accessToken, refreshToken })
+        console.log('Current session:', session)
+        console.log('URL Parameters:', Object.fromEntries(searchParams.entries()))
 
-        if (tokenHash && type === 'recovery') {
-          // Handle recovery link with token_hash
-          console.log('Processing recovery link with token_hash:', tokenHash)
-          
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: 'recovery'
-          })
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          setError('Authentication error. Please try clicking the reset link again.')
+          setHasValidSession(false)
+        } else if (session?.user) {
+          console.log('User authenticated successfully for password reset:', session.user)
 
-          if (error) {
-            console.error('Recovery token verification error:', error)
-            setError('Invalid or expired reset link. Please request a new password reset.')
+          // Check if this is a recovery flow
+          const type = searchParams.get('type')
+          const isRecoveryFlow = type === 'recovery' || searchParams.has('token_hash') || searchParams.has('access_token')
+
+          if (!isRecoveryFlow) {
+            // User is logged in but this doesn't look like a password reset flow
+            console.log('User logged in but not a password reset flow')
+            setError('Please use the password reset link from your email.')
             setHasValidSession(false)
-          } else if (data.user) {
-            console.log('Recovery token verified successfully:', data.user)
+          } else {
+            // Valid recovery flow
             setHasValidSession(true)
             setError('')
-          } else {
-            setError('Invalid or expired reset link. Please request a new password reset.')
-            setHasValidSession(false)
-          }
-        } else if (accessToken && refreshToken && type === 'recovery') {
-          // Handle legacy format with access_token and refresh_token
-          console.log('Processing recovery link with access/refresh tokens')
-          
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          })
-
-          if (error) {
-            console.error('Session setup error:', error)
-            setError('Invalid or expired reset link. Please request a new password reset.')
-            setHasValidSession(false)
-          } else if (data.user) {
-            console.log('Session established successfully:', data.user)
-            setHasValidSession(true)
-            setError('')
-          } else {
-            setError('Invalid or expired reset link. Please request a new password reset.')
-            setHasValidSession(false)
           }
         } else {
-          console.log('No valid recovery parameters found')
-          setError('Invalid or expired reset link. Please request a new password reset.')
-          setHasValidSession(false)
+          // No session found - check if we have URL parameters that indicate this should be a reset flow
+          const type = searchParams.get('type')
+          const hasAuthParams = searchParams.get('access_token') ||
+                               searchParams.get('refresh_token') ||
+                               searchParams.get('token_hash')
+
+          if (type === 'recovery' || hasAuthParams) {
+            // This looks like a reset flow but no session - likely expired or invalid
+            setError('Invalid or expired reset link. Please request a new password reset.')
+            setHasValidSession(false)
+          } else {
+            // No auth params, user shouldn't be here
+            setError('Invalid or expired reset link. Please request a new password reset.')
+            setHasValidSession(false)
+          }
         }
       } catch (err) {
         console.error('Error processing password reset:', err)
-        setError('An error occurred while processing your reset link. Please try again.')
+        setError('An error occurred while processing your password reset. Please try again.')
         setHasValidSession(false)
       }
 
