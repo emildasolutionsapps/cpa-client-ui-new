@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { getPresignedUrl, uploadFileToS3, validateFile } from "./s3Service";
+import { ConversationThreadService } from "./conversationThreadService";
 
 export interface ChatMessage {
   id: string;
@@ -134,6 +135,9 @@ export class ChatService {
         .select("UserID, FullName, UserType")
         .eq("UserID", message.SenderUserID)
         .single();
+
+      // Reset conversation thread since client just replied
+      await ConversationThreadService.resetConversationThread(clientId, senderId, 'reply');
 
       return {
         id: message.MessageID,
@@ -402,6 +406,9 @@ export class ChatService {
 
       // Get presigned URL for the attachment
       const { url: attachmentUrl } = await getPresignedUrl(s3Key);
+
+      // Reset conversation thread since client just replied
+      await ConversationThreadService.resetConversationThread(clientId, senderId, 'reply');
 
       return {
         id: message.MessageID,

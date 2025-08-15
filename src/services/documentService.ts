@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { uploadClientDocument, uploadClientGeneralDocument } from "./s3Service";
+import { documentBadgeEventEmitter } from "./documentBadgeService";
 
 // Types matching the admin app schema
 export interface DocumentRecord {
@@ -337,6 +338,7 @@ export class DocumentService {
   static async updateDocumentRequestStatus(
     requestId: string,
     status: "uploaded" | "completed",
+    clientId?: string,
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
@@ -347,6 +349,11 @@ export class DocumentService {
       if (error) {
         console.error("Error updating document request status:", error);
         throw error;
+      }
+
+      // Emit badge update to refresh document badge count if clientId provided
+      if (clientId) {
+        documentBadgeEventEmitter.emit(clientId);
       }
 
       return { success: true };

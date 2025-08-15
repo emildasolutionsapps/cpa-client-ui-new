@@ -13,7 +13,9 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { useAuth } from '../contexts/AuthContext';
-import { UnreadService, badgeEventEmitter } from '../services/unreadService';
+import { ConversationThreadService, conversationThreadEventEmitter } from '../services/conversationThreadService';
+import { DocumentBadgeService, documentBadgeEventEmitter } from '../services/documentBadgeService';
+import { SignatureBadgeService, signatureBadgeEventEmitter } from '../services/signatureBadgeService';
 import { useMobileSidebar } from '../App';
 import { COMPANY_LOGO_URL, COMPANY_NAME, COMPANY_TAGLINE } from '../constants/branding';
 
@@ -39,13 +41,23 @@ export default function Sidebar() {
   } = useAuth();
 
   const { isMobileMenuOpen, setIsMobileMenuOpen } = useMobileSidebar();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unansweredMessageCount, setUnansweredMessageCount] = useState(0);
+  const [documentBadgeCount, setDocumentBadgeCount] = useState(0);
+  const [signatureBadgeCount, setSignatureBadgeCount] = useState(0);
   const navigate = useNavigate();
 
-  // Debug: Log when unreadCount changes
+  // Debug: Log when counts change
   useEffect(() => {
-    console.log('Sidebar: Unread count changed to:', unreadCount);
-  }, [unreadCount]);
+    console.log('Sidebar: Unanswered message count changed to:', unansweredMessageCount);
+  }, [unansweredMessageCount]);
+
+  useEffect(() => {
+    console.log('Sidebar: Document badge count changed to:', documentBadgeCount);
+  }, [documentBadgeCount]);
+
+  useEffect(() => {
+    console.log('Sidebar: Signature badge count changed to:', signatureBadgeCount);
+  }, [signatureBadgeCount]);
 
   // Debug: Log when selectedClient changes
   useEffect(() => {
@@ -55,43 +67,105 @@ export default function Sidebar() {
   useEffect(() => {
     if (selectedClient?.ClientID && user?.id) {
       console.log('Sidebar: Setting up subscriptions for client:', selectedClient.ClientID);
-      // Load initial unread count
-      loadUnreadCount();
+      // Load initial counts
+      loadUnansweredMessageCount();
+      loadDocumentBadgeCount();
+      loadSignatureBadgeCount();
 
-      // Subscribe to unread updates
-      const subscription = UnreadService.subscribeToUnreadUpdates(
+      // Subscribe to conversation thread updates
+      const conversationSubscription = ConversationThreadService.subscribeToConversationThreadUpdates(
         selectedClient.ClientID,
         user.id,
         (count) => {
-          console.log('Sidebar: Received unread count update:', count);
-          setUnreadCount(count);
+          console.log('Sidebar: Received unanswered message count update:', count);
+          setUnansweredMessageCount(count);
         }
       );
 
-      // Subscribe to badge update events (for immediate updates when messages are marked as read)
-      const unsubscribeBadgeEvents = badgeEventEmitter.subscribe((clientId) => {
+      // Subscribe to document badge updates
+      const documentSubscription = DocumentBadgeService.subscribeToDocumentUpdates(
+        selectedClient.ClientID,
+        (count) => {
+          console.log('Sidebar: Received document badge count update:', count);
+          setDocumentBadgeCount(count);
+        }
+      );
+
+      // Subscribe to signature badge updates
+      const signatureSubscription = SignatureBadgeService.subscribeToSignatureUpdates(
+        selectedClient.ClientID,
+        (count) => {
+          console.log('Sidebar: Received signature badge count update:', count);
+          setSignatureBadgeCount(count);
+        }
+      );
+
+      // Subscribe to conversation thread update events (for immediate updates)
+      const unsubscribeConversationEvents = conversationThreadEventEmitter.subscribe((clientId) => {
         if (clientId === selectedClient.ClientID) {
-          console.log('Sidebar: Received badge update event, refreshing count');
-          loadUnreadCount();
+          console.log('Sidebar: Received conversation thread update event, refreshing count');
+          loadUnansweredMessageCount();
+        }
+      });
+
+      // Subscribe to document badge update events
+      const unsubscribeDocumentBadgeEvents = documentBadgeEventEmitter.subscribe((clientId) => {
+        if (clientId === selectedClient.ClientID) {
+          console.log('Sidebar: Received document badge update event, refreshing count');
+          loadDocumentBadgeCount();
+        }
+      });
+
+      // Subscribe to signature badge update events
+      const unsubscribeSignatureBadgeEvents = signatureBadgeEventEmitter.subscribe((clientId) => {
+        if (clientId === selectedClient.ClientID) {
+          console.log('Sidebar: Received signature badge update event, refreshing count');
+          loadSignatureBadgeCount();
         }
       });
 
       return () => {
         console.log('Sidebar: Cleaning up subscriptions for client:', selectedClient?.ClientID);
-        UnreadService.unsubscribeFromUnreadUpdates(subscription);
-        unsubscribeBadgeEvents();
+        conversationSubscription.unsubscribe();
+        documentSubscription.unsubscribe();
+        signatureSubscription.unsubscribe();
+        unsubscribeConversationEvents();
+        unsubscribeDocumentBadgeEvents();
+        unsubscribeSignatureBadgeEvents();
       };
     }
   }, [selectedClient, user]);
 
-  const loadUnreadCount = async () => {
+  const loadUnansweredMessageCount = async () => {
     if (selectedClient?.ClientID && user?.id) {
-      console.log('Sidebar: Loading unread count for client:', selectedClient.ClientID);
-      const count = await UnreadService.getUnreadCount(selectedClient.ClientID, user.id);
-      console.log('Sidebar: Unread count loaded:', count);
-      setUnreadCount(count);
+      console.log('Sidebar: Loading unanswered message count for client:', selectedClient.ClientID);
+      const count = await ConversationThreadService.getUnansweredMessageCount(selectedClient.ClientID, user.id);
+      console.log('Sidebar: Unanswered message count loaded:', count);
+      setUnansweredMessageCount(count);
     } else {
-      console.warn('Sidebar: Missing client ID or user ID, cannot load unread count');
+      console.warn('Sidebar: Missing client ID or user ID, cannot load unanswered message count');
+    }
+  };
+
+  const loadDocumentBadgeCount = async () => {
+    if (selectedClient?.ClientID) {
+      console.log('Sidebar: Loading document badge count for client:', selectedClient.ClientID);
+      const count = await DocumentBadgeService.getPendingDocumentCount(selectedClient.ClientID);
+      console.log('Sidebar: Document badge count loaded:', count);
+      setDocumentBadgeCount(count);
+    } else {
+      console.warn('Sidebar: Missing client ID, cannot load document badge count');
+    }
+  };
+
+  const loadSignatureBadgeCount = async () => {
+    if (selectedClient?.ClientID) {
+      console.log('Sidebar: Loading signature badge count for client:', selectedClient.ClientID);
+      const count = await SignatureBadgeService.getPendingSignatureCount(selectedClient.ClientID);
+      console.log('Sidebar: Signature badge count loaded:', count);
+      setSignatureBadgeCount(count);
+    } else {
+      console.warn('Sidebar: Missing client ID, cannot load signature badge count');
     }
   };
 
@@ -210,9 +284,19 @@ export default function Sidebar() {
                     }`}
                   />
                   <span className="flex-1">{item.name}</span>
-                  {item.name === 'Messages' && unreadCount > 0 && (
+                  {item.name === 'Messages' && unansweredMessageCount > 0 && (
                     <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                      {unansweredMessageCount > 99 ? '99+' : unansweredMessageCount}
+                    </span>
+                  )}
+                  {item.name === 'Documents' && documentBadgeCount > 0 && (
+                    <span className="bg-orange-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                      {documentBadgeCount > 99 ? '99+' : documentBadgeCount}
+                    </span>
+                  )}
+                  {item.name === 'Signatures' && signatureBadgeCount > 0 && (
+                    <span className="bg-purple-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                      {signatureBadgeCount > 99 ? '99+' : signatureBadgeCount}
                     </span>
                   )}
                 </>

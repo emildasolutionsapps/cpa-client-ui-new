@@ -7,6 +7,8 @@ import {
 } from '@heroicons/react/24/outline';
 import FilterBar from '../components/FilterBar';
 import UploadZone from '../components/UploadZone';
+import PendingDocumentsCard from '../components/PendingDocumentsCard';
+import PendingSignaturesCard from '../components/PendingSignaturesCard';
 
 import { useClientData } from '../hooks/useClientData';
 import { useAuth } from '../contexts/AuthContext';
@@ -99,7 +101,15 @@ export default function Dashboard() {
     <div className="max-w-7xl mx-auto px-2 lg:px-0">
       <FilterBar />
 
+      {/* Pending Documents Warning Card */}
+      {selectedClient?.ClientID && (
+        <PendingDocumentsCard clientId={selectedClient.ClientID} />
+      )}
 
+      {/* Pending Signatures Warning Card */}
+      {selectedClient?.ClientID && (
+        <PendingSignaturesCard clientId={selectedClient.ClientID} />
+      )}
 
       {/* Main Status Banner */}
       {/* <motion.div 

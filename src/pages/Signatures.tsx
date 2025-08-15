@@ -7,15 +7,18 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   XCircleIcon,
-  FolderOpenIcon
+  FolderOpenIcon,
+  ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
+  CloudArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { useFilters } from '../contexts/FilterContext';
 import { useAuth } from '../contexts/AuthContext';
-import { PageFilters } from '../components/PageFilters';
 import { SignatureService, SignatureRequest } from '../services/signatureService';
+import { SignatureBadgeService } from '../services/signatureBadgeService';
 
 export default function Signatures() {
-  const { selectedJobId } = useFilters(); // Only need job filter, not year
+  const { selectedJobId, selectedJobName } = useFilters();
   const { user, selectedClient } = useAuth();
   const [showSignModal, setShowSignModal] = useState(false);
   const [showDocumentViewer, setShowDocumentViewer] = useState(false);
@@ -23,11 +26,32 @@ export default function Signatures() {
   const [signatureRequests, setSignatureRequests] = useState<SignatureRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingRequests, setDownloadingRequests] = useState<Set<string>>(new Set());
+  const [uploadingRequests, setUploadingRequests] = useState<Set<string>>(new Set());
 
-  // Load signature requests on component mount and when job or client changes
+  // Load signature requests when client or job changes
   useEffect(() => {
-    loadSignatureRequests();
+    if (selectedClient?.ClientID) {
+      loadSignatureRequests();
+    }
   }, [selectedJobId, selectedClient]);
+
+  // Set up real-time subscription for signature updates
+  useEffect(() => {
+    if (selectedClient?.ClientID) {
+      const subscription = SignatureBadgeService.subscribeToSignatureUpdates(
+        selectedClient.ClientID,
+        (count) => {
+          console.log('Signatures page: Received signature update, refreshing list');
+          loadSignatureRequests();
+        }
+      );
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [selectedClient]);
 
   const loadSignatureRequests = async () => {
     try {
@@ -64,7 +88,7 @@ export default function Signatures() {
         window.open(result.signingUrl, '_blank');
 
         // Update status to viewed
-        await SignatureService.updateRequestStatus(request.RequestID, 'viewed');
+        await SignatureService.updateRequestStatus(request.RequestID, 'viewed', selectedClient?.ClientID);
 
         // Refresh the list
         loadSignatureRequests();
@@ -100,7 +124,7 @@ export default function Signatures() {
         setShowDocumentViewer(true);
 
         // Update status to viewed
-        await SignatureService.updateRequestStatus(request.RequestID, 'viewed');
+        await SignatureService.updateRequestStatus(request.RequestID, 'viewed', selectedClient?.ClientID);
         loadSignatureRequests();
       } else {
         setError(result.error || 'Unable to get signing URL');
@@ -111,14 +135,114 @@ export default function Signatures() {
     }
   };
 
-  // Filter signature requests based on selected job
-  // TEMPORARY: Show all requests for debugging
-  const filteredRequests = signatureRequests; // Temporarily disable filtering
+  const handleDownloadForOffline = async (request: SignatureRequest) => {
+    try {
+      setDownloadingRequests(prev => new Set(prev).add(request.RequestID));
+      setError('');
+
+      // Mock download functionality for now (will implement S3 later)
+      console.log('Downloading document for offline signing:', request.DocumentName);
+
+      // Simulate download delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Update status to indicate downloaded for offline signing
+      await SignatureService.updateRequestStatus(request.RequestID, 'downloaded', selectedClient?.ClientID);
+
+      // For now, just show a success message
+      alert(`Document "${request.DocumentName}" downloaded successfully! You can now sign it offline and upload it back.`);
+
+      // Refresh the list to show updated status
+      loadSignatureRequests();
+
+    } catch (err) {
+      console.error('Error downloading document:', err);
+      setError('Failed to download document for offline signing');
+    } finally {
+      setDownloadingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(request.RequestID);
+        return newSet;
+      });
+    }
+  };
+
+  const handleUploadSignedDocument = async (request: SignatureRequest, file: File) => {
+    try {
+      setUploadingRequests(prev => new Set(prev).add(request.RequestID));
+      setError('');
+
+      // Mock upload functionality for now (will implement S3 later)
+      console.log('Uploading signed document:', file.name, 'for request:', request.RequestID);
+
+      // Simulate upload delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Update status to signed
+      await SignatureService.updateRequestStatus(request.RequestID, 'signed', selectedClient?.ClientID);
+
+      alert(`Signed document "${file.name}" uploaded successfully!`);
+
+      // Refresh the list to show updated status
+      loadSignatureRequests();
+
+    } catch (err) {
+      console.error('Error uploading signed document:', err);
+      setError('Failed to upload signed document');
+    } finally {
+      setUploadingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(request.RequestID);
+        return newSet;
+      });
+    }
+  };
+
+  // Filter signature requests based on selected job (if any)
+  const filteredRequests = selectedJobId
+    ? signatureRequests.filter(request => request.Jobs.JobID === selectedJobId)
+    : signatureRequests;
 
   console.log('Signatures: Total requests:', signatureRequests.length, 'Filtered requests:', filteredRequests.length);
-  console.log('Signatures: Selected Job ID:', selectedJobId);
+  console.log('Signatures: Selected Job ID:', selectedJobId, 'Job Name:', selectedJobName);
+
+  // Show no client selected state
+  if (!selectedClient) {
+    return (
+      <div className="max-w-7xl mx-auto px-2 lg:px-0">
+        <motion.div
+          className="text-center py-12"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <DocumentIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">No Client Selected</h2>
+          <p className="text-slate-600 mb-4">
+            Please select a client from the dashboard to view signature requests.
+          </p>
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+        </motion.div>
+      </div>
+    )
+  }
 
   const getStatusBadge = (request: SignatureRequest) => {
+    // Handle new "downloaded" status
+    if (request.Status === 'downloaded') {
+      return (
+        <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium border bg-purple-100 text-purple-800 border-purple-200">
+          <CloudArrowDownIcon className="w-4 h-4" />
+          <span>Downloaded for Offline</span>
+        </span>
+      );
+    }
+
     const statusInfo = SignatureService.getStatusInfo(request);
 
     const colorClasses = {
@@ -173,55 +297,35 @@ export default function Signatures() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Digital Signatures</h1>
-        <p className="text-slate-600 mb-8">Review and sign required documents for your tax filing</p>
-
-        {/* Debug Info */}
-        <div className="mb-4 p-4 bg-gray-100 rounded-lg text-sm">
-          <p><strong>Debug Info:</strong></p>
-          <p>Current User Email: {user?.email || 'Not logged in'}</p>
-          <p>Selected Client: {selectedClient?.ClientName || 'None'} ({selectedClient?.ClientID || 'No ID'})</p>
-          <p>Selected Job ID: {selectedJobId || 'None'}</p>
-          <p>Total Signature Requests: {signatureRequests.length}</p>
-          <p>Filtered Requests: {filteredRequests.length}</p>
-          <div className="mt-2 space-x-2">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Digital Signatures</h1>
+            <p className="text-slate-600">
+              Review and sign required documents for {selectedClient.ClientName}
+              {selectedJobName && ` - ${selectedJobName}`}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-slate-500">
+              Client: <span className="font-medium text-slate-700">{selectedClient.ClientName}</span>
+            </p>
+            {selectedJobName && (
+              <p className="text-sm text-slate-500">
+                Service: <span className="font-medium text-slate-700">{selectedJobName}</span>
+              </p>
+            )}
             <button
-              onClick={() => {
-                console.log('All signature requests:', signatureRequests);
-                console.log('Filtered requests:', filteredRequests);
-              }}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-xs"
+              onClick={() => window.location.href = '/dashboard'}
+              className="text-sm text-blue-600 hover:text-blue-700 mt-1"
             >
-              Log to Console
-            </button>
-            <button
-              onClick={async () => {
-                const result = await SignatureService.getSignatureRequests();
-                console.log('Fresh signature requests fetch:', result);
-              }}
-              className="px-3 py-1 bg-green-500 text-white rounded text-xs"
-            >
-              Refresh Data
-            </button>
-            <button
-              onClick={async () => {
-                // Test direct database query
-                const { supabase } = await import('../lib/supabase');
-                const { data, error } = await supabase
-                  .from('DocumentSigningRequests')
-                  .select('*')
-                  .limit(10);
-                console.log('Direct DB query result:', { data, error });
-              }}
-              className="px-3 py-1 bg-purple-500 text-white rounded text-xs"
-            >
-              Test DB Direct
+              Change Selection
             </button>
           </div>
         </div>
 
-        {/* Service Filter */}
-        <PageFilters className="mb-6" showJobFilter={true} showYearFilter={false} />
+
+
+
 
         {/* Loading State */}
         {loading && (
@@ -255,12 +359,19 @@ export default function Signatures() {
           <div className="text-center py-12">
             <DocumentIcon className="w-16 h-16 text-slate-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">No Signature Requests</h3>
-            <p className="text-slate-600">
-              {selectedJobId
-                ? "No signature requests found for the selected service."
-                : "You don't have any documents waiting for signature at this time."
-              }
+            <p className="text-slate-600 mb-4">
+              {selectedJobId && selectedJobName
+                ? `No signature requests found for ${selectedJobName}.`
+                : `No signature requests found for ${selectedClient.ClientName}.`}
             </p>
+            {selectedJobId && (
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="text-blue-600 hover:text-blue-700 text-sm"
+              >
+                View all services or change selection
+              </button>
+            )}
           </div>
         )}
 
@@ -332,17 +443,73 @@ export default function Signatures() {
                       <>
                         <button
                           onClick={() => handleSignInApp(request)}
-                          className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                          className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2"
                         >
-                          Sign in App
+                          <PencilSquareIcon className="w-4 h-4" />
+                          <span>Sign Online</span>
                         </button>
                         <button
                           onClick={() => handleSignNow(request)}
-                          className="bg-teal-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors"
+                          className="bg-teal-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center space-x-2"
                         >
-                          Sign in New Tab
+                          <FolderOpenIcon className="w-4 h-4" />
+                          <span>New Tab</span>
+                        </button>
+                        <button
+                          onClick={() => handleDownloadForOffline(request)}
+                          disabled={downloadingRequests.has(request.RequestID)}
+                          className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                        >
+                          {downloadingRequests.has(request.RequestID) ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Downloading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowDownTrayIcon className="w-4 h-4" />
+                              <span>Download</span>
+                            </>
+                          )}
                         </button>
                       </>
+                    )}
+
+                    {/* Upload button for downloaded documents */}
+                    {request.Status === 'downloaded' && (
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleUploadSignedDocument(request, file);
+                            }
+                          }}
+                          className="hidden"
+                          id={`upload-${request.RequestID}`}
+                        />
+                        <label
+                          htmlFor={`upload-${request.RequestID}`}
+                          className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center space-x-2 cursor-pointer"
+                        >
+                          {uploadingRequests.has(request.RequestID) ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowUpTrayIcon className="w-4 h-4" />
+                              <span>Upload Signed</span>
+                            </>
+                          )}
+                        </label>
+                        <span className="text-sm text-amber-600 font-medium">
+                          Ready for signed document upload
+                        </span>
+                      </div>
                     )}
 
                     {/* View details for signed documents */}
