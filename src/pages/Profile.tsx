@@ -10,12 +10,16 @@ import {
   EyeSlashIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
+import ChangeRequestModal from '../components/ChangeRequestModal';
+import SpouseAccessModal from '../components/SpouseAccessModal';
 
 export default function Profile() {
   const [showSSN, setShowSSN] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false);
+  const [isSpouseAccessModalOpen, setIsSpouseAccessModalOpen] = useState(false);
 
   const { user, checkMFAStatus } = useAuth();
   const navigate = useNavigate();
@@ -84,7 +88,10 @@ export default function Profile() {
                 <p className="text-slate-600">Client since {profileData.dateJoined}</p>
               </div>
             </div>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2">
+            <button
+              onClick={() => setIsChangeRequestModalOpen(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2"
+            >
               <PencilSquareIcon className="w-4 h-4" />
               <span>Submit Change Request</span>
             </button>
@@ -222,17 +229,33 @@ export default function Profile() {
         >
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Account Management</h3>
           <div className="flex flex-wrap gap-4">
-            <button className="bg-white text-slate-700 px-6 py-3 rounded-xl font-medium hover:bg-slate-50 transition-colors border border-slate-200 flex items-center space-x-2">
+            <button
+              onClick={() => setIsChangeRequestModalOpen(true)}
+              className="bg-white text-slate-700 px-6 py-3 rounded-xl font-medium hover:bg-slate-50 transition-colors border border-slate-200 flex items-center space-x-2"
+            >
               <PencilSquareIcon className="w-5 h-5" />
               <span>Submit Change Request</span>
             </button>
-            <button className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2">
+            <button
+              onClick={() => setIsSpouseAccessModalOpen(true)}
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2"
+            >
               <UserPlusIcon className="w-5 h-5" />
               <span>Request Portal Access for Spouse</span>
             </button>
           </div>
         </motion.div>
       </motion.div>
+
+      {/* Modals */}
+      <ChangeRequestModal
+        isOpen={isChangeRequestModalOpen}
+        onClose={() => setIsChangeRequestModalOpen(false)}
+      />
+      <SpouseAccessModal
+        isOpen={isSpouseAccessModalOpen}
+        onClose={() => setIsSpouseAccessModalOpen(false)}
+      />
     </div>
   );
 }
