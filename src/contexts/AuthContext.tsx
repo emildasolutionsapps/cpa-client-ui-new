@@ -212,15 +212,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resetPassword = async (email: string) => {
-    // Use production URL for password reset redirect
-    const resetUrl = window.location.hostname === 'localhost'
-      ? `${window.location.origin}/reset-password`
-      : 'https://vvvcpaclient.netlify.app/reset-password';
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetUrl,
-    })
-    return { error }
+    // Import the service dynamically to avoid circular dependencies
+    const { PasswordResetService } = await import('../services/passwordResetService');
+    return await PasswordResetService.sendClientPasswordReset(email);
   }
 
   const updatePassword = async (password: string) => {
