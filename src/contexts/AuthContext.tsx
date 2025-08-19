@@ -45,8 +45,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Client switching state
   const [availableClients, setAvailableClients] = useState<Client[]>([])
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(() => {
+    // Initialize from localStorage if available
+    const saved = localStorage.getItem('selectedClientId')
+    return saved || null
+  })
+  const [selectedClient, setSelectedClient] = useState<Client | null>(() => {
+    // Initialize from localStorage if available
+    const saved = localStorage.getItem('selectedClient')
+    return saved ? JSON.parse(saved) : null
+  })
   const [loadingClients, setLoadingClients] = useState(false)
   const [clientsError, setClientsError] = useState<string | null>(null)
   const [hasClientAccess, setHasClientAccess] = useState(false)
@@ -93,11 +101,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (clients.length > 0) {
         setHasClientAccess(true)
-        // Set default selected client (first one) only if none is currently selected
-        if (!selectedClientId) {
+
+        // Check if previously selected client is still available
+        const savedClientId = localStorage.getItem('selectedClientId')
+        const savedClient = clients.find(c => c.ClientID === savedClientId)
+
+        if (savedClient) {
+          // Restore previously selected client
+          setSelectedClientId(savedClient.ClientID)
+          setSelectedClient(savedClient)
+        } else if (!selectedClientId) {
+          // Set default selected client (first one) only if none is currently selected
           const defaultClient = clients[0]
           setSelectedClientId(defaultClient.ClientID)
           setSelectedClient(defaultClient)
+          // Persist the selection
+          localStorage.setItem('selectedClientId', defaultClient.ClientID)
+          localStorage.setItem('selectedClient', JSON.stringify(defaultClient))
         }
       } else {
         // Handle case where user has no active client access
@@ -126,6 +146,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (client) {
       setSelectedClientId(clientId)
       setSelectedClient(client)
+      // Persist the selection
+      localStorage.setItem('selectedClientId', clientId)
+      localStorage.setItem('selectedClient', JSON.stringify(client))
     }
   }
 

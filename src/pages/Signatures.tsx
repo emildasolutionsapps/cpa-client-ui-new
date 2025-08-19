@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   DocumentIcon,
   CheckCircleIcon,
@@ -10,15 +10,21 @@ import {
   FolderOpenIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
-  CloudArrowDownIcon
+  CloudArrowDownIcon,
+  FunnelIcon,
+  BriefcaseIcon,
+  CalendarIcon,
+  ChevronDownIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline';
 import { useFilters } from '../contexts/FilterContext';
 import { useAuth } from '../contexts/AuthContext';
 import { SignatureService, SignatureRequest } from '../services/signatureService';
 import { SignatureBadgeService } from '../services/signatureBadgeService';
+import { PageFilters } from '../components/PageFilters';
 
 export default function Signatures() {
-  const { selectedJobId, selectedJobName } = useFilters();
+  const { selectedJobId, selectedJobName, getFilteredJobs, availableJobs } = useFilters();
   const { user, selectedClient } = useAuth();
   const [showSignModal, setShowSignModal] = useState(false);
   const [showDocumentViewer, setShowDocumentViewer] = useState(false);
@@ -28,13 +34,31 @@ export default function Signatures() {
   const [error, setError] = useState<string | null>(null);
   const [downloadingRequests, setDownloadingRequests] = useState<Set<string>>(new Set());
   const [uploadingRequests, setUploadingRequests] = useState<Set<string>>(new Set());
+  const [showAllJobs, setShowAllJobs] = useState(true); // Default to showing all jobs
 
-  // Load signature requests when client or job changes
+  // Get signature counts by client for badges
+  const getClientSignatureCounts = () => {
+    const counts: { [clientId: string]: { name: string; count: number } } = {};
+    signatureRequests.forEach(request => {
+      if (request.ClientID) {
+        if (!counts[request.ClientID]) {
+          counts[request.ClientID] = {
+            name: request.ClientName || 'Unknown Client',
+            count: 0
+          };
+        }
+        counts[request.ClientID].count++;
+      }
+    });
+    return counts;
+  };
+
+  // Load signature requests when client, job, or filter changes
   useEffect(() => {
     if (selectedClient?.ClientID) {
       loadSignatureRequests();
     }
-  }, [selectedJobId, selectedClient]);
+  }, [selectedJobId, selectedClient, showAllJobs]);
 
   // Set up real-time subscription for signature updates
   useEffect(() => {
@@ -60,13 +84,14 @@ export default function Signatures() {
 
       const result = await SignatureService.getSignatureRequests({
         clientId: selectedClient?.ClientID,
-        jobId: selectedJobId || undefined
+        jobId: showAllJobs ? undefined : (selectedJobId || undefined)
       });
 
       if (result.success && result.data) {
         console.log('Signatures: Loaded signature requests:', result.data);
         console.log('Signatures: Current selectedJobId:', selectedJobId);
         console.log('Signatures: Current selectedClient:', selectedClient);
+        console.log('Signatures: Show all jobs:', showAllJobs);
         setSignatureRequests(result.data);
       } else {
         setError(result.error || 'Failed to load signature requests');
@@ -198,10 +223,12 @@ export default function Signatures() {
     }
   };
 
-  // Filter signature requests based on selected job (if any)
-  const filteredRequests = selectedJobId
-    ? signatureRequests.filter(request => request.Jobs.JobID === selectedJobId)
-    : signatureRequests;
+  // Filter signature requests based on job selection
+  const filteredRequests = showAllJobs
+    ? signatureRequests
+    : selectedJobId
+      ? signatureRequests.filter(request => request.Jobs?.JobID === selectedJobId)
+      : signatureRequests;
 
   console.log('Signatures: Total requests:', signatureRequests.length, 'Filtered requests:', filteredRequests.length);
   console.log('Signatures: Selected Job ID:', selectedJobId, 'Job Name:', selectedJobName);
@@ -297,29 +324,69 @@ export default function Signatures() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">Digital Signatures</h1>
-            <p className="text-slate-600">
-              Review and sign required documents for {selectedClient.ClientName}
-              {selectedJobName && ` - ${selectedJobName}`}
-            </p>
+        {/* Simple Page Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900">Digital Signatures</h1>
+          <p className="text-slate-600 mt-1">
+            Review and sign required documents
+          </p>
+        </div>
+
+        {/* Simplified Header with Client Badges */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <FunnelIcon className="h-5 w-5 text-gray-500" />
+              <h3 className="text-lg font-medium text-gray-900">Digital Signatures</h3>
+
+              {/* Client Badges */}
+              {showAllJobs && (
+                <div className="flex items-center gap-2 ml-4">
+                  {Object.entries(getClientSignatureCounts()).map(([clientId, { name, count }]) => (
+                    <div
+                      key={clientId}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                        selectedJob?.ClientID === clientId
+                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                          : 'bg-gray-100 text-gray-700 border border-gray-200'
+                      }`}
+                    >
+                      <span>{name}</span>
+                      <span className="bg-white rounded-full px-1.5 py-0.5 text-xs font-semibold">
+                        {count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <span className="text-sm text-gray-500">
+              {filteredRequests.length} signatures
+            </span>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-slate-500">
-              Client: <span className="font-medium text-slate-700">{selectedClient.ClientName}</span>
-            </p>
-            {selectedJobName && (
-              <p className="text-sm text-slate-500">
-                Service: <span className="font-medium text-slate-700">{selectedJobName}</span>
-              </p>
+
+          {/* Filter Controls */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAllJobs}
+                  onChange={(e) => setShowAllJobs(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Show from all jobs</span>
+              </label>
+            </div>
+
+            {/* Job Selection Dropdown when not showing all jobs */}
+            {!showAllJobs && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Job:</span>
+                <PageFilters showJobFilter={true} showYearFilter={false} />
+              </div>
             )}
-            <button
-              onClick={() => window.location.href = '/dashboard'}
-              className="text-sm text-blue-600 hover:text-blue-700 mt-1"
-            >
-              Change Selection
-            </button>
           </div>
         </div>
 
@@ -364,14 +431,7 @@ export default function Signatures() {
                 ? `No signature requests found for ${selectedJobName}.`
                 : `No signature requests found for ${selectedClient.ClientName}.`}
             </p>
-            {selectedJobId && (
-              <button
-                onClick={() => window.location.href = '/dashboard'}
-                className="text-blue-600 hover:text-blue-700 text-sm"
-              >
-                View all services or change selection
-              </button>
-            )}
+
           </div>
         )}
 
@@ -386,54 +446,73 @@ export default function Signatures() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      request.Status === 'signed' ? 'bg-emerald-50' :
-                      request.Status === 'expired' || request.Status === 'declined' ? 'bg-red-50' :
-                      'bg-amber-50'
-                    }`}>
-                      {request.Status === 'signed' ? (
-                        <CheckCircleIcon className="w-6 h-6 text-emerald-600" />
-                      ) : request.Status === 'expired' ? (
-                        <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
-                      ) : request.Status === 'declined' ? (
-                        <XCircleIcon className="w-6 h-6 text-red-600" />
-                      ) : (
-                        <PencilSquareIcon className="w-6 h-6 text-amber-600" />
+                {/* Document Info Section */}
+                <div className="flex items-start space-x-4 mb-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    request.Status === 'signed' ? 'bg-emerald-50' :
+                    request.Status === 'expired' || request.Status === 'declined' ? 'bg-red-50' :
+                    'bg-amber-50'
+                  }`}>
+                    {request.Status === 'signed' ? (
+                      <CheckCircleIcon className="w-6 h-6 text-emerald-600" />
+                    ) : request.Status === 'expired' ? (
+                      <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+                    ) : request.Status === 'declined' ? (
+                      <XCircleIcon className="w-6 h-6 text-red-600" />
+                    ) : (
+                      <PencilSquareIcon className="w-6 h-6 text-amber-600" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-semibold text-slate-900 mb-1">📄 {request.DocumentName}</h3>
+                        {request.Jobs && (
+                          <div className="flex items-center space-x-2">
+                            <BriefcaseIcon className="h-4 w-4 text-slate-400" />
+                            <span className="text-sm text-slate-600">
+                              From: <span className="font-medium text-slate-900">{request.Jobs.JobName}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {getStatusBadge(request)}
+                      </div>
+                    </div>
+                    <p className="text-slate-600 text-sm mb-3">
+                      {SignatureService.getStatusInfo(request).description}
+                    </p>
+                    <div className="flex items-center space-x-4 text-xs text-slate-500">
+                      <span className="flex items-center space-x-1">
+                        <CalendarIcon className="h-3 w-3" />
+                        <span>Created: {new Date(request.CreatedAt).toLocaleDateString()}</span>
+                      </span>
+                      {request.ExpiresAt && (
+                        <span className="flex items-center space-x-1">
+                          <ClockIcon className="h-3 w-3" />
+                          <span>Expires: {new Date(request.ExpiresAt).toLocaleDateString()}</span>
+                        </span>
+                      )}
+                      {request.SignedAt && (
+                        <span>Signed: {new Date(request.SignedAt).toLocaleDateString()}</span>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="font-semibold text-slate-900">📄 {request.DocumentName}</h3>
-                        {request.Job && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                            {request.Job.JobName}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-slate-600 text-sm mb-3">
-                        {SignatureService.getStatusInfo(request).description}
-                      </p>
-                      <div className="flex items-center space-x-4 text-xs text-slate-500">
-                        <span>Created: {new Date(request.CreatedAt).toLocaleDateString()}</span>
-                        {request.ExpiresAt && (
-                          <span>Expires: {new Date(request.ExpiresAt).toLocaleDateString()}</span>
-                        )}
-                        {request.SignedAt && (
-                          <span>Signed: {new Date(request.SignedAt).toLocaleDateString()}</span>
-                        )}
-                      </div>
-                    </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    {getStatusBadge(request)}
+                </div>
 
+                {/* Action Buttons Section - Moved to Bottom */}
+                <div className="border-t border-gray-100 pt-4">
+                  <div className="flex flex-wrap gap-2">
                     {/* Preview button - always available */}
                     <button
                       onClick={() => handleViewDocumentPreview(request)}
-                      className="bg-gray-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-600 transition-colors"
+                      className="bg-gray-500 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-600 transition-colors flex items-center gap-1"
                     >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
                       Preview
                     </button>
 
@@ -443,32 +522,32 @@ export default function Signatures() {
                       <>
                         <button
                           onClick={() => handleSignInApp(request)}
-                          className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                          className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
                         >
                           <PencilSquareIcon className="w-4 h-4" />
-                          <span>Sign Online</span>
+                          Sign Online
                         </button>
                         <button
                           onClick={() => handleSignNow(request)}
-                          className="bg-teal-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center space-x-2"
+                          className="bg-teal-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-teal-700 transition-colors flex items-center gap-1"
                         >
                           <FolderOpenIcon className="w-4 h-4" />
-                          <span>New Tab</span>
+                          New Tab
                         </button>
                         <button
                           onClick={() => handleDownloadForOffline(request)}
                           disabled={downloadingRequests.has(request.RequestID)}
-                          className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                          className="bg-purple-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-1 disabled:opacity-50"
                         >
                           {downloadingRequests.has(request.RequestID) ? (
                             <>
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              <span>Downloading...</span>
+                              Downloading...
                             </>
                           ) : (
                             <>
                               <ArrowDownTrayIcon className="w-4 h-4" />
-                              <span>Download</span>
+                              Download
                             </>
                           )}
                         </button>
@@ -477,7 +556,7 @@ export default function Signatures() {
 
                     {/* Upload button for downloaded documents */}
                     {request.Status === 'downloaded' && (
-                      <div className="flex items-center space-x-3">
+                      <>
                         <input
                           type="file"
                           accept=".pdf,.doc,.docx"
@@ -492,32 +571,32 @@ export default function Signatures() {
                         />
                         <label
                           htmlFor={`upload-${request.RequestID}`}
-                          className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center space-x-2 cursor-pointer"
+                          className="bg-green-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1 cursor-pointer"
                         >
                           {uploadingRequests.has(request.RequestID) ? (
                             <>
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              <span>Uploading...</span>
+                              Uploading...
                             </>
                           ) : (
                             <>
                               <ArrowUpTrayIcon className="w-4 h-4" />
-                              <span>Upload Signed</span>
+                              Upload Signed
                             </>
                           )}
                         </label>
-                        <span className="text-sm text-amber-600 font-medium">
-                          Ready for signed document upload
-                        </span>
-                      </div>
+                      </>
                     )}
 
                     {/* View details for signed documents */}
                     {request.Status === 'signed' && (
                       <button
                         onClick={() => handleViewDocument(request)}
-                        className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                        className="bg-green-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
                       >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
                         View Details
                       </button>
                     )}
