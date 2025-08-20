@@ -10,6 +10,8 @@ export interface Job {
   JobName: string;
   CurrentStatusID: string;
   HasTaxMetrics: boolean;
+  IsArchived?: boolean;
+  CompletedDate?: string;
   Priority?: string;
   DueDate?: string;
   TotalBudgetedHours?: number;
@@ -56,6 +58,9 @@ export class DataService {
     clientId: string,
   ): Promise<{ data: Job[] | null; error: any }> {
     try {
+      console.log('🔍 DataService.getJobsForClient called with clientId:', clientId);
+      console.log('🔍 Expected clientId for safderkbta:', 'fcc9ee69-0dd1-4c59-a412-e83eae3c4018');
+
       const { data, error } = await supabase
         .from("Jobs")
         .select(`
@@ -67,6 +72,8 @@ export class DataService {
           JobName,
           CurrentStatusID,
           HasTaxMetrics,
+          IsArchived,
+          CompletedDate,
           Priority,
           DueDate,
           TotalBudgetedHours,
@@ -87,10 +94,14 @@ export class DataService {
           )
         `)
         .eq("ClientID", clientId)
+        .eq("IsArchived", false)
         .order("CreatedAt", { ascending: false });
 
+      console.log('📊 Raw query result:', { data, error });
+      console.log('📊 Number of jobs found:', data?.length || 0);
+
       if (error) {
-        console.error("Error fetching jobs for client:", error);
+        console.error("❌ Error fetching jobs for client:", error);
         return { data: null, error };
       }
 
@@ -104,6 +115,8 @@ export class DataService {
         JobName: job.JobName,
         CurrentStatusID: job.CurrentStatusID,
         HasTaxMetrics: job.HasTaxMetrics,
+        IsArchived: job.IsArchived || false,
+        CompletedDate: job.CompletedDate,
         Priority: job.Priority,
         DueDate: job.DueDate,
         TotalBudgetedHours: job.TotalBudgetedHours,
@@ -119,6 +132,9 @@ export class DataService {
         ServiceTemplateName: job.ServiceTemplates?.TemplateName,
         ServiceTemplateDescription: job.ServiceTemplates?.Description,
       })) || [];
+
+      console.log('✅ Transformed jobs:', transformedData);
+      console.log('✅ Service templates found:', transformedData.map(j => j.ServiceTemplateName));
 
       return { data: transformedData, error: null };
     } catch (error) {

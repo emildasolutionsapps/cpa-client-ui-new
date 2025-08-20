@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Extract client data from the join result
       const clients = data?.map(item => item.Clients).filter(Boolean) || []
+      console.log('🏢 Available clients loaded:', clients.map(c => ({ id: c.ClientID, name: c.ClientName })));
       setAvailableClients(clients)
 
       if (clients.length > 0) {
@@ -108,11 +109,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (savedClient) {
           // Restore previously selected client
+          console.log('🔄 Restoring saved client:', { id: savedClient.ClientID, name: savedClient.ClientName });
           setSelectedClientId(savedClient.ClientID)
           setSelectedClient(savedClient)
-        } else if (!selectedClientId) {
-          // Set default selected client (first one) only if none is currently selected
+        } else {
+          // Set default selected client (first one) - this handles both initial load and when saved client is no longer available
           const defaultClient = clients[0]
+          console.log('🎯 Setting default client:', { id: defaultClient.ClientID, name: defaultClient.ClientName });
           setSelectedClientId(defaultClient.ClientID)
           setSelectedClient(defaultClient)
           // Persist the selection

@@ -26,6 +26,7 @@ export function useClientData() {
 
   // Function to fetch jobs for the selected client
   const fetchJobs = async (clientId: string) => {
+    console.log('🎯 useClientData.fetchJobs called with clientId:', clientId);
     setLoadingJobs(true);
     setJobsError(null);
 
