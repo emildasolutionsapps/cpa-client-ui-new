@@ -580,15 +580,26 @@ export const uploadClientDocument = async (
   jobCode: string,
   metadata?: Record<string, string>,
   onProgress?: (progress: S3UploadProgress) => void,
+  requestName?: string, // New parameter for smart naming
 ): Promise<S3UploadResult> => {
   try {
-    // Use proper job folder naming
+    // Generate smart filename for requested documents
+    let fileName = file.name;
+    if (requestName) {
+      // Create safe filename from request name (remove special characters)
+      const safeRequestName = requestName.replace(/[^a-zA-Z0-9\-_]/g, '_').substring(0, 50);
+      const fileExtension = fileName.substring(fileName.lastIndexOf('.'));
+      const originalNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+      fileName = `req-${safeRequestName}-${originalNameWithoutExt}${fileExtension}`;
+    }
+
+    // Use proper job folder naming with smart filename
     const key = getClientDocumentKey(
       clientName,
       clientCode,
       jobTitle,
       jobCode,
-      file.name,
+      fileName,
     );
 
     // Upload the file using the standard upload function
@@ -790,12 +801,14 @@ export const uploadToWorkpapers = async (
   jobTitle: string,
   jobCode: string,
   metadata?: Record<string, string>,
+  smartFileName?: string, // New parameter to use smart filename if provided
 ): Promise<S3UploadResult> => {
   try {
     const clientFolderName = createClientFolderName(clientName, clientCode);
     const jobFolderName = createJobFolderName(jobTitle, jobCode);
+    const fileName = smartFileName || file.name; // Use smart filename if provided
     const key =
-      `clients/${clientFolderName}/${jobFolderName}/05_Internal_Workpapers/${file.name}`;
+      `clients/${clientFolderName}/${jobFolderName}/05_Internal_Workpapers/${fileName}`;
 
     return await uploadFileToS3(file, key, {
       clientName,

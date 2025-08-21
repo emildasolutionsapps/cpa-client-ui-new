@@ -146,6 +146,8 @@ export class DocumentService {
     clientName: string,
     clientCode: string,
     isRequestedDocument: boolean = false, // New parameter to distinguish upload types
+    requestName?: string, // New parameter for smart naming of requested documents
+    requestId?: string, // New parameter to link document to specific request
   ): Promise<{ success: boolean; documentId?: string; error?: string }> {
     try {
       console.log("Starting client document upload:", {
@@ -181,13 +183,16 @@ export class DocumentService {
       try {
         // Use different upload functions based on document type
         if (isRequestedDocument) {
-          // Requested documents go to 02_Requested_Documents folder
+          // Requested documents go to 02_Requested_Documents folder with smart naming
           uploadResult = await uploadClientDocument(
             file,
             clientName,
             clientCode,
             jobTitle,
             jobCode,
+            undefined, // metadata
+            undefined, // onProgress
+            requestName, // Pass request name for smart naming
           );
         } else {
           // General uploads go to 01_Client_General_Uploads folder
@@ -231,12 +236,24 @@ export class DocumentService {
           // Copy file to workpapers folder for accountant use
           try {
             const { uploadToWorkpapers } = await import("./s3Service");
+
+            // Generate smart filename for workpapers copy if this is a requested document
+            let smartFileName: string | undefined;
+            if (isRequestedDocument && requestName) {
+              const safeRequestName = requestName.replace(/[^a-zA-Z0-9\-_]/g, '_').substring(0, 50);
+              const fileExtension = file.name.substring(file.name.lastIndexOf('.'));
+              const originalNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.'));
+              smartFileName = `req-${safeRequestName}-${originalNameWithoutExt}${fileExtension}`;
+            }
+
             const workpaperResult = await uploadToWorkpapers(
               file,
               clientName,
               clientCode,
               jobTitle,
               jobCode,
+              undefined, // metadata
+              smartFileName, // Use smart filename for workpapers copy
             );
 
             if (workpaperResult.error) {
@@ -272,6 +289,8 @@ export class DocumentService {
           S3_Key: s3UploadSuccessful ? uploadResult.key : null, // Updated column name
           UploadedBy: userId,
           ClientCanSee: true,
+          RequestID: requestId || null, // Link to request if this is for a specific request
+          OriginalFileName: file.name, // Store original filename before any smart renaming
         };
 
         const { data, error } = await supabase

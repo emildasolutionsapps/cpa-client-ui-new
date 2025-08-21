@@ -318,6 +318,13 @@ export default function Documents() {
         throw new Error('Failed to get client information');
       }
 
+      // Get request name for smart naming if this is for a specific request
+      let requestName: string | undefined;
+      if (requestId) {
+        const request = documentRequests.find(r => r.RequestID === requestId);
+        requestName = request?.RequestName;
+      }
+
       // Upload document
       const result = await DocumentService.uploadDocument(
         file,
@@ -326,7 +333,9 @@ export default function Documents() {
         user.id,
         clientInfo.ClientName,
         clientInfo.ClientCode,
-        !!requestId // true if this is for a specific request (requested document), false for general upload
+        !!requestId, // true if this is for a specific request (requested document), false for general upload
+        requestName, // Pass request name for smart naming
+        requestId // Pass request ID to link document to request
       );
 
       if (result.success) {
@@ -407,6 +416,152 @@ export default function Documents() {
       }
     }
   };
+
+  const renderMyUploads = () => {
+    const generalUploads = s3Files['01_Client_General_Uploads'] || [];
+    const requestedUploads = s3Files['02_Requested_Documents'] || [];
+    const allUploads = [...generalUploads, ...requestedUploads];
+
+    if (allUploads.length === 0) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-emerald-50 to-emerald-50 rounded-2xl p-6 border border-emerald-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900 mb-2">My Uploads</h2>
+                <p className="text-slate-600 text-sm">
+                  Upload and manage your documents
+                </p>
+              </div>
+              <div>
+                <input
+                  type="file"
+                  id="uploads-upload"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleDocumentUpload(file);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="uploads-upload"
+                  className="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer"
+                >
+                  <CloudArrowUpIcon className="w-5 h-5" />
+                  <span>Upload Document</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center py-12">
+            <DocumentTextIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-900 mb-2">No uploads yet</h3>
+            <p className="text-slate-600 mb-6">Start by uploading your first document</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-emerald-50 to-emerald-50 rounded-2xl p-6 border border-emerald-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900 mb-2">My Uploads</h2>
+              <p className="text-slate-600 text-sm">
+                All your uploaded documents ({allUploads.length} files)
+              </p>
+            </div>
+            <div>
+              <input
+                type="file"
+                id="uploads-upload"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleDocumentUpload(file);
+                  }
+                }}
+              />
+              <label
+                htmlFor="uploads-upload"
+                className="inline-flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer"
+              >
+                <CloudArrowUpIcon className="w-5 h-5" />
+                <span>Upload Document</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          {allUploads.map((file) => {
+            const isRequestedDoc = file.key.includes('/02_Requested_Documents/');
+            const isSmartNamed = file.name.startsWith('req-');
+
+            return (
+              <div key={file.key} className={`rounded-xl p-4 border ${
+                isRequestedDoc
+                  ? 'bg-blue-50 border-blue-200'
+                  : 'bg-emerald-50 border-emerald-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    {isRequestedDoc ? (
+                      <div className="flex items-center space-x-2">
+                        <CheckCircleIcon className="w-5 h-5 text-blue-600" />
+                        <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
+                          Requested
+                        </span>
+                      </div>
+                    ) : (
+                      <DocumentTextIcon className="w-5 h-5 text-emerald-600" />
+                    )}
+                    <div>
+                      <h4 className="font-medium text-slate-900">{file.name}</h4>
+                      <p className="text-sm text-slate-600">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB • Uploaded {new Date(file.lastModified).toLocaleDateString()}
+                        {isRequestedDoc && (
+                          <span className="ml-2 text-blue-600">• Fulfilled document request</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => window.open(file.url, '_blank')}
+                      className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                      title="View document"
+                    >
+                      <FolderOpenIcon className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = file.url || '';
+                        link.download = file.name;
+                        link.click();
+                      }}
+                      className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Download document"
+                    >
+                      <ArrowDownTrayIcon className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -692,7 +847,7 @@ export default function Documents() {
             </div>
           )}
 
-          {activeTab === 'uploads' && renderS3Files('01_Client_General_Uploads', 'My Uploads', 'emerald', true)}
+          {activeTab === 'uploads' && renderMyUploads()}
 
           {activeTab === 'deliverables' && renderS3Files('03_Deliverables', 'Your Deliverables', 'purple', false)}
 
