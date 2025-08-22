@@ -143,12 +143,17 @@ export class SignatureService {
           signerEmail: request.SignerEmail,
         });
 
+        // Get the current session for authentication
+        const { data: { session } } = await supabase.auth.getSession();
+
         const response = await fetch(
           `https://cjgzilrlesuiaxtexnfk.supabase.co/functions/v1/boldsign-api`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              'Authorization': `Bearer ${session?.access_token}`,
+              'apikey': supabase.supabaseKey,
             },
             body: JSON.stringify({
               documentId: request.BoldSignDocumentID,
@@ -289,6 +294,13 @@ export class SignatureService {
           label: "Cancelled",
           color: "gray",
           description: "Document signing was cancelled",
+        };
+      case "downloaded":
+      case "completed":
+        return {
+          label: "Completed",
+          color: "green",
+          description: "Document has been signed and downloaded",
         };
       default:
         return {
